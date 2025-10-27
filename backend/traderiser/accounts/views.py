@@ -16,35 +16,49 @@ class SignupView(APIView):
         data = request.data
         email = data.get('email')
         password = data.get('password')
+        username = data.get('username')  # Add username
         account_type = data.get('account_type', 'standard')  # default
 
-        if not email or not password:
-            return Response({'error': 'Email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+        # Validate required fields
+        if not email or not password or not username:
+            return Response(
+                {'error': 'Email, password, and username are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Try to find existing user
         try:
             user = User.objects.get(email=email)
             if not user.check_password(password):
-                return Response({'error': 'Invalid password'}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response(
+                    {'error': 'Invalid password'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
             if not user.can_create_account(account_type):
-                return Response({'error': 'Cannot create this account type'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {'error': 'Cannot create this account type'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             with transaction.atomic():
                 Account.objects.create(user=user, account_type=account_type)
 
             refresh = RefreshToken.for_user(user)
             active_account = user.accounts.filter(account_type=account_type).first()
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'user': UserSerializer(user).data,
-                'active_account': AccountSerializer(active_account).data
-            }, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'user': UserSerializer(user).data,
+                    'active_account': AccountSerializer(active_account).data
+                },
+                status=status.HTTP_201_CREATED
+            )
 
         except User.DoesNotExist:
             # New user
-            serializer = UserSerializer(data={'email': email})
+            serializer = UserSerializer(data={'email': email, 'username': username})
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -58,12 +72,15 @@ class SignupView(APIView):
 
             refresh = RefreshToken.for_user(user)
             active_account = user.accounts.get(account_type='standard')
-            return Response({
-                'refresh': str(refresh),
-                'access': str(RefreshToken.for_user(user).access_token),
-                'user': UserSerializer(user).data,
-                'active_account': AccountSerializer(active_account).data
-            }, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'user': UserSerializer(user).data,
+                    'active_account': AccountSerializer(active_account).data
+                },
+                status=status.HTTP_201_CREATED
+            )
         
 class CreateAdditionalAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]

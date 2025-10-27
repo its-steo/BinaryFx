@@ -133,15 +133,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <TopNavbar
         isLoggedIn={isLoggedIn}
         user={user}
-        accountBalance={Number(activeAccount?.balance) || 0} // Ensure number
+        accountBalance={Number(activeAccount?.balance) || 0}
         showBalance={true}
         activeAccount={activeAccount}
         accounts={availableAccounts}
         onSwitchAccount={handleSwitchAccount}
         onLogout={handleLogout}
       />
-      <Sidebar loginType={loginType} activeAccount={activeAccount} />
-      <main className="flex-1 w-full overflow-auto">{children}</main>
+      <div className="flex flex-1">
+        <Sidebar loginType={loginType} activeAccount={activeAccount} />
+        <main className="flex-1 w-full overflow-auto md:pl-64">{children}</main>
+      </div>
     </div>
   );
 }

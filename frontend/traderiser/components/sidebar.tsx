@@ -48,14 +48,15 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
   }
 
   const navItems = loginType === "real" && activeAccount?.account_type === "pro-fx"
-    ? [
-        { href: "/dashboard/forex-trading", label: "Pro-FX Trading", icon: BarChart3 },
+    ? [ 
+        { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+        { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: BarChart3 },
         { href: "/wallet", label: "Wallet", icon: WalletIcon },
       ]
     : [
         { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
         { href: "/trading", label: "Trading", icon: BarChart3 },
-        ...(hasProFxAccount && loginType === "real" ? [{ href: "/dashboard/forex-trading", label: "Pro-FX Trading", icon: BarChart3 }] : []),
+        ...(hasProFxAccount && loginType === "real" ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: BarChart3 }] : []),
         { href: "/robots", label: "Robots", icon: Zap },
         { href: "/wallet", label: "Wallet", icon: WalletIcon },
       ]

@@ -62,21 +62,20 @@ export function VerifyWithdrawalModal({ transactionId, onClose, onSuccess, onSet
   }
 
   const handleResendOTP = async () => {
-    setIsSubmitting(true)
-    setError("")
-
-    try {
-      const res = await api.resendOTP(transactionId)
-      if (res.error) throw new Error(res.error)
-      onSetMessage({ type: 'success', text: "New OTP sent to your email" })
-      setTimeLeft(60)
-      setCanResend(false)
-    } catch (err) {
-      onSetMessage({ type: 'error', text: (err as Error).message || "Failed to resend OTP" })
-    } finally {
-      setIsSubmitting(false)
-    }
+  setIsSubmitting(true);
+  setError("");
+  try {
+    const res = await api.resendOTP(transactionId);
+    if (res.error) throw new Error(res.error);
+    onSetMessage({ type: "success", text: "New OTP sent to your email" });
+    setTimeLeft(60);
+    setCanResend(false);
+  } catch (err) {
+    onSetMessage({ type: "error", text: (err as Error).message || "Failed to resend OTP" });
+  } finally {
+    setIsSubmitting(false);
   }
+}
 
   const handleNumpadClick = (value: string) => {
     if (value === "backspace") {

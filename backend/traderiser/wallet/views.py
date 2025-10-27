@@ -338,32 +338,63 @@ class ResendOTPView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        if not isinstance(request.data, dict):
+            return Response(
+                {'error': 'Invalid payload. Expected JSON object with "transaction_id" key'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         transaction_id = request.data.get('transaction_id')
+        if not transaction_id:
+            return Response(
+                {'error': 'transaction_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
-            transaction = WalletTransaction.objects.get(id=transaction_id, wallet__account__user=request.user, status='pending')
+            transaction_id = int(transaction_id)
+            wallet_transaction = WalletTransaction.objects.get(
+                id=transaction_id,
+                wallet__account__user=request.user,
+                status='pending'
+            )
+        except ValueError:
+            return Response(
+                {'error': 'transaction_id must be a valid integer'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except WalletTransaction.DoesNotExist:
-            return Response({'error': 'Invalid or non-pending transaction'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Invalid or non-pending transaction'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         otp_code = generate_otp()
         with transaction.atomic():
-            OTPCode.objects.filter(transaction=transaction, is_used=False).update(is_used=True)
+            # Delete existing OTPCode for this transaction
+            OTPCode.objects.filter(transaction=wallet_transaction).delete()
+            # Create new OTPCode
             OTPCode.objects.create(
                 user=request.user,
                 code=otp_code,
                 purpose='withdrawal',
-                transaction=transaction
+                transaction=wallet_transaction,
+                is_used=False
             )
 
         try:
             send_mail(
                 subject="Withdrawal OTP (Resent)",
-                message=f"Hi {request.user.username},\n\nYour new OTP for withdrawing {transaction.amount} USD from {transaction.wallet.account.account_type} account (Ref: {transaction.reference_id}) is {otp_code}.",
+                message=f"Hi {request.user.username},\n\nYour new OTP for withdrawing {wallet_transaction.amount} USD from {wallet_transaction.wallet.account.account_type} account (Ref: {wallet_transaction.reference_id}) is {otp_code}.",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
                 fail_silently=False
             )
         except Exception as e:
-            logger.error(f"Failed to send resent OTP email: {str(e)}")
-            return Response({'error': 'Failed to send OTP email'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Failed to send resent OTP email for user {request.user.id}: {str(e)}")
+            return Response(
+                {'error': 'Failed to send OTP email'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        return Response({'message': 'New OTP sent to your email.'})
+        return Response({'message': 'New OTP sent to your email.'}, status=status.HTTP_200_OK)

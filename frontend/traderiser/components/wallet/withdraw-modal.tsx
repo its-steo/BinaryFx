@@ -93,7 +93,7 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
 
     try {
       console.log("Calling api.withdraw with:", { amount, wallet_type: "main", account_type: selectedAccountType });
-      const res = await api.withdraw({
+      const res = await api.withdrawOTP({
         amount,
         wallet_type: "main",
         account_type: selectedAccountType,

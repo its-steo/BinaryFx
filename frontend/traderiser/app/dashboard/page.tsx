@@ -8,7 +8,7 @@ import { TransactionHistory } from "@/components/dashboard/transaction-history";
 import { TradingViewWidget } from "@/components/dashboard/trading-view";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ActionButtons } from "@/components/dashboard/action-buttons"; // Import ActionButtons
+import { ActionButtons } from "@/components/dashboard/action-buttons";
 
 interface DashboardData {
   user: {
@@ -80,7 +80,7 @@ export default function DashboardPage() {
 
   const handleResetDemo = async () => {
     try {
-      const res = await api.resetDemoBalance({ account_type: selectedAccount });
+      const res = await api.resetDemoBalance();
       if (res.error) throw new Error(res.error);
       showSuccess("Demo balance reset to $10,000");
       window.dispatchEvent(new Event("session-updated"));
@@ -89,8 +89,21 @@ export default function DashboardPage() {
     }
   };
 
+  const handleCreateProFx = async () => {
+    try {
+      const res = await api.createAdditionalAccount({ account_type: "pro-fx" });
+      if (res.error) throw new Error(res.error);
+      showSuccess("Pro-FX account created successfully");
+      fetchData(); // Refresh dashboard data
+      window.dispatchEvent(new Event("session-updated"));
+    } catch (err: any) {
+      showError(err.message || "Failed to create Pro-FX account");
+    }
+  };
+
   const isRealAccount = loginType === "real";
   const selectedAccountData = data?.accounts.find((a) => a.account_type === selectedAccount);
+  const hasProFx = data?.user.accounts.some((acc) => acc.account_type === "pro-fx") || false;
 
   if (loading) {
     return (
@@ -122,22 +135,32 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white px-4 sm:px-6 md:px-8 py-6 sm:py-8">
+    <div className="min-h-screen bg-black text-white px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-        {/* Header and Buttons */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">Dashboard</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Dashboard</h1>
             <p className="text-xs sm:text-sm text-slate-400 capitalize">{selectedAccount} Account</p>
           </div>
           {/* Buttons for md and above (top-right) */}
-          <div className="hidden md:flex md:gap-3">
+          <div className="hidden md:flex md:flex-wrap md:gap-3">
             {isRealAccount ? (
-              <ActionButtons />
+              <>
+                <ActionButtons />
+                {!hasProFx && (
+                  <Button
+                    onClick={handleCreateProFx}
+                    className="bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 text-xs sm:text-sm px-3 sm:px-4 py-2"
+                  >
+                    Create Pro-FX Account
+                  </Button>
+                )}
+              </>
             ) : (
               <Button
                 onClick={handleResetDemo}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 text-xs sm:text-sm px-3 sm:px-4 py-2"
               >
                 🔄 Reset Demo Balance to $10,000
               </Button>
@@ -156,13 +179,23 @@ export default function DashboardPage() {
         />
 
         {/* Buttons for smaller screens (below md) */}
-        <div className="md:hidden">
+        <div className="md:hidden flex flex-col gap-3">
           {isRealAccount ? (
-            <ActionButtons />
+            <>
+              <ActionButtons />
+              {!hasProFx && (
+                <Button
+                  onClick={handleCreateProFx}
+                  className="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 text-xs sm:text-sm px-3 sm:px-4 py-2"
+                >
+                  Create Pro-FX Account
+                </Button>
+              )}
+            </>
           ) : (
             <Button
               onClick={handleResetDemo}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3"
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 text-xs sm:text-sm px-3 sm:px-4 py-2"
             >
               🔄 Reset Demo Balance to $10,000
             </Button>
@@ -170,7 +203,7 @@ export default function DashboardPage() {
         </div>
 
         {/* TradingView Widget */}
-        <div className="w-full" style={{ minHeight: "300px sm:400px md:450px" }}>
+        <div className="w-full" style={{ minHeight: "250px sm:350px md:400px lg:450px" }}>
           <TradingViewWidget symbol={selectedAccount === "pro-fx" ? "EURUSD" : "NASDAQ:AAPL"} />
         </div>
 

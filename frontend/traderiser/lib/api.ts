@@ -37,6 +37,47 @@ export interface MpesaNumberResponse {
   phone_number: string
 }
 
+export interface ForexPair {
+  id: number
+  name: string
+  base_currency: string
+  quote_currency: string
+  pip_value: number
+  contract_size: number
+  spread: number
+  base_simulation_price: number
+}
+
+export interface Position {
+  id: number
+  user: number
+  account: number
+  pair: ForexPair
+  direction: "buy" | "sell"
+  volume_lots: number
+  entry_price: number
+  sl?: number
+  tp?: number
+  floating_p_l: number
+  status: "open" | "closed"
+  entry_time: string
+}
+
+export interface ForexTrade {
+  id: number
+  position: Position
+  close_price: number
+  realized_p_l: number
+  close_time: string
+  close_reason: string
+}
+
+export interface WalletBalance {
+  balance: number
+  currency: string
+  account_type: string
+}
+
 export async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = localStorage.getItem("refresh_token")
   if (!refreshToken) return null
@@ -151,44 +192,56 @@ export const login = async (data: { email: string; password: string; account_typ
   return response
 }
 
-export const getAccount = () => apiRequest("/accounts/account/")
-
-export const createAccount = (data: { account_type: string }) =>
-  apiRequest("/accounts/create-account/", { method: "POST", body: JSON.stringify(data) })
-
-export const switchAccount = async (data: { account_id: number }) => {
-  const response = await apiRequest<{ user?: any; account?: any }>("/accounts/switch/", {
+export const createAdditionalAccount = async (data: { account_type: string }) => {
+  const response = await apiRequest("/accounts/account/create/", {
     method: "POST",
     body: JSON.stringify(data),
   })
 
-  if (response.data && response.data.user && response.data.user.accounts && Array.isArray(response.data.user.accounts)) {
-    const normalizedUser = {
-      ...response.data.user,
-      accounts: response.data.user.accounts.map((acc: any) => ({
-        ...acc,
-        balance: Number(acc.balance) || 0,
-      })),
+  if (response.data) {
+    const { user, active_account } = response.data
+    if (user && active_account) {
+      const normalizedUser = {
+        ...user,
+        accounts: user.accounts.map((acc: any) => ({
+          ...acc,
+          balance: Number(acc.balance) || 0,
+        })),
+      }
+      localStorage.setItem("user_session", JSON.stringify(normalizedUser))
+      localStorage.setItem("account_type", active_account.account_type)
+      localStorage.setItem("login_type", active_account.account_type === "demo" ? "demo" : "real")
+      localStorage.setItem("active_account_id", active_account.id.toString())
+      return { data: { user: normalizedUser, active_account }, status: response.status }
     }
-    localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-    localStorage.setItem("active_account_id", data.account_id.toString())
-    const account = normalizedUser.accounts.find((acc: any) => acc.id === data.account_id)
-    if (account) {
+  }
+
+  return response
+}
+
+export const getAccount = () => apiRequest("/accounts/account/")
+
+export const switchAccount = async (data: { account_id: number }) => {
+  const response = await apiRequest("/accounts/wallet/switch/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+  if (response.data) {
+    const { user, account } = response.data
+    if (user && account) {
+      const normalizedUser = {
+        ...user,
+        accounts: user.accounts.map((acc: any) => ({
+          ...acc,
+          balance: Number(acc.balance) || 0,
+        })),
+      }
+      localStorage.setItem("user_session", JSON.stringify(normalizedUser))
       localStorage.setItem("account_type", account.account_type)
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real")
-    }
-  } else if (response.error) {
-    console.warn("Switch account API failed, using local data:", response.error)
-    const userSession = localStorage.getItem("user_session")
-    if (userSession) {
-      const user = JSON.parse(userSession)
-      const account = user.accounts?.find((acc: any) => acc.id === data.account_id)
-      if (account) {
-        localStorage.setItem("account_type", account.account_type)
-        localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real")
-        localStorage.setItem("active_account_id", data.account_id.toString())
-        return { data: { user, account }, status: 200 }
-      }
+      localStorage.setItem("active_account_id", data.account_id.toString())
+      return { data: { user, account }, status: 200 }
     }
   }
 
@@ -266,15 +319,18 @@ export const getWallets = async () => {
   return response
 }
 
+export const getForexCurrentPrices = (pairIds: number[]) =>
+  apiRequest(`/forex/current-prices/?ids=${pairIds.join(",")}`)
+
 export const getWalletTransactions = () => apiRequest<{ transactions: WalletTransaction[] }>("/wallet/transactions/")
 
 export const deposit = (data: { amount: number; currency: string; wallet_type: string; mpesa_phone: string; account_type: string }) =>
   apiRequest("/wallet/deposit/", { method: "POST", body: JSON.stringify(data) })
 
-export const withdraw = (data: { amount: number; wallet_type: string; target_currency: string }) =>
+export const withdrawOTP = (data: { amount: number; wallet_type: string; account_type: string }) =>
   apiRequest("/wallet/withdraw/otp/", { method: "POST", body: JSON.stringify(data) })
 
-export const verifyWithdrawal = (data: { otp: string; wallet_type: string; transaction_id: string }) =>
+export const verifyWithdrawal = (data: { code: string; transaction_id: number }) =>
   apiRequest("/wallet/withdraw/verify/", { method: "POST", body: JSON.stringify(data) })
 
 export const getMpesaNumber = () => apiRequest<MpesaNumberResponse>("/wallet/mpesa-number/")
@@ -282,14 +338,38 @@ export const getMpesaNumber = () => apiRequest<MpesaNumberResponse>("/wallet/mpe
 export const setMpesaNumber = (data: { phone_number: string }) =>
   apiRequest("/wallet/mpesa-number/", { method: "POST", body: JSON.stringify(data) })
 
-export const resendOTP = (data: { wallet_type: string }) =>
-  apiRequest("/wallet/withdraw/resend-otp/", { method: "POST", body: JSON.stringify(data) })
+export const resendOTP = (transactionId: string) =>
+  apiRequest("/wallet/resend-otp/", { method: "POST", body: JSON.stringify({ transaction_id: transactionId }) })
+
+// Forex Trading API
+export const getForexPairs = () => apiRequest<{ pairs: ForexPair[] }>("/forex/pairs/")
+
+export const getForexCurrentPrice = (pairId: number) => apiRequest<{ current_price: number }>(`/forex/current-price/${pairId}/`)
+
+export const placeForexOrder = (data: {
+  pair_id: number
+  direction: "buy" | "sell"
+  volume_lots: number
+  sl?: number
+  tp?: number
+}) => apiRequest<{ position: Position }>("/forex/orders/place/", { method: "POST", body: JSON.stringify(data) })
+
+export const getForexPositions = () => apiRequest<{ positions: Position[] }>("/forex/positions/")
+
+export const closeForexPosition = (positionId: number) =>
+  apiRequest<{ message: string }>(`/forex/positions/${positionId}/close/`, { method: "POST" })
+
+
+export const closeAllPositions = () =>
+  apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" });
+
+export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
 
 export const api = {
   signup,
   login,
   getAccount,
-  createAccount,
+  createAccount: createAdditionalAccount,
   switchAccount,
   getMarkets,
   getTradeTypes,
@@ -311,9 +391,18 @@ export const api = {
   getWallets,
   getWalletTransactions,
   deposit,
-  withdraw,
+  withdrawOTP,
   verifyWithdrawal,
   getMpesaNumber,
   setMpesaNumber,
   resendOTP,
+  createAdditionalAccount,
+  getForexPairs,
+  getForexCurrentPrices,
+  getForexCurrentPrice,
+  placeForexOrder,
+  getForexPositions,
+  closeForexPosition,
+  getForexHistory,
+  closeAllPositions,
 }

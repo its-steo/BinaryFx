@@ -33,7 +33,8 @@ INSTALLED_APPS = [
     'trading',
     'corsheaders',
     'dashboard',
-    'wallet'
+    'wallet',
+    'forex',
 ]
 
 MIDDLEWARE = [

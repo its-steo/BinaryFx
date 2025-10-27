@@ -8,4 +8,5 @@ urlpatterns = [
     path('api/trading/', include('trading.urls')),
     path('api/dashboard/', include('dashboard.urls')),
     path('api/wallet/', include('wallet.urls')),
+    path('api/forex/', include('forex.urls')),
 ]
