@@ -10,7 +10,7 @@ import HistoryPage from "@/components/fx-pro-trading/history-page";
 import BottomNavigation from "@/components/bottom-navifation";
 import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
-import { api } from "@/lib/api";
+//import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { usePriceUpdates } from "@/hooks/use-price-updates";
 
@@ -28,7 +28,6 @@ export default function TradingApp() {
   const mainRef = useRef<HTMLElement>(null);
   const router = useRouter();
 
-  // Initialize global price updates
   usePriceUpdates();
 
   const loadSession = async () => {
@@ -78,28 +77,18 @@ export default function TradingApp() {
       const proFxAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === "pro-fx");
       if (!proFxAccount) {
         setHasProFx(false);
-        toast.error("Pro-FX account required. Create one in the dashboard.");
-        router.push("/no-pro-fx");
+        setError("Pro-FX account required");
+        toast.error("Pro-FX account required");
+        router.push("/dashboard");
         return;
       }
-
       setHasProFx(true);
-      if (account.account_type !== "pro-fx") {
-        await api.switchAccount({ account_id: proFxAccount.id });
-        setActiveAccount(proFxAccount);
-        localStorage.setItem("active_account_id", proFxAccount.id.toString());
-        localStorage.setItem("account_type", proFxAccount.account_type);
-        localStorage.setItem("login_type", proFxAccount.account_type === "demo" ? "demo" : "real");
-        window.dispatchEvent(new Event("session-updated"));
-      }
-    } catch (err) {
-      console.error("Error parsing user_session:", err);
+    } catch (err: any) {
       setIsLoggedIn(false);
       setUser(null);
       setActiveAccount(null);
-      setHasProFx(false);
-      setError("Failed to load session. Please log in again.");
-      toast.error("Failed to load session. Please log in again.");
+      setError(err.message || "Failed to load session data. Please log in again.");
+      toast.error(err.message || "Failed to load session data. Please log in again.");
       router.push("/login");
     } finally {
       setIsLoading(false);
@@ -108,35 +97,15 @@ export default function TradingApp() {
 
   useEffect(() => {
     loadSession();
-    window.addEventListener("session-updated", loadSession);
-    return () => window.removeEventListener("session-updated", loadSession);
-  }, [router]);
 
-  // Scroll handler for main container (Main, Trades, History)
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = mainRef.current?.scrollTop || 0;
-      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
-        setIsNavVisible(false); // Hide on scroll down past 100px
-      } else {
-        setIsNavVisible(true); // Show on scroll up or small scroll
-      }
-      lastScrollY.current = currentScrollY;
+    const handleSessionUpdate = () => {
+      loadSession();
     };
-
-    const ref = mainRef.current;
-    if (ref && currentPage !== "chat") {
-      ref.addEventListener("scroll", handleScroll, { passive: true });
-    }
-    return () => {
-      if (ref && currentPage !== "chat") {
-        ref.removeEventListener("scroll", handleScroll);
-      }
-    };
-  }, [currentPage]);
+    window.addEventListener("session-updated", handleSessionUpdate);
+    return () => window.removeEventListener("session-updated", handleSessionUpdate);
+  }, []);
 
   const handleSwitchAccount = async (account: any) => {
-    if (!account) return;
     try {
       localStorage.setItem("active_account_id", account.id.toString());
       localStorage.setItem("account_type", account.account_type);
@@ -178,7 +147,7 @@ export default function TradingApp() {
   }
 
   if (error || hasProFx === false) {
-    return null; // Handled by router.push
+    return null;
   }
 
   return (

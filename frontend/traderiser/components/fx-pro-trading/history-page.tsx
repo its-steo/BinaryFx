@@ -9,7 +9,6 @@ import { toast } from "sonner";
 export default function HistoryPage() {
   const { trades, isLoading, error } = useTradeHistory();
 
-  // Ensure realized_p_l is a number before summing
   const totalRealizedPL = trades
     ? trades.reduce((sum, trade) => {
         const pl = typeof trade.realized_p_l === "string" ? parseFloat(trade.realized_p_l) : trade.realized_p_l;
@@ -24,7 +23,6 @@ export default function HistoryPage() {
       }).length / trades.length) * 100
     : 0;
 
-  // Handle errors, including 403 Pro-FX account required
   useEffect(() => {
     if (error) {
       if (error === "Pro-FX account required") {
@@ -38,16 +36,10 @@ export default function HistoryPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <h1 className="text-3xl font-bold text-foreground">Trade History</h1>
-
-      {/* Statistics */}
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-4 bg-card/50 border-border">
           <p className="text-sm text-muted-foreground">Total Realized P&L</p>
-          <p
-            className={`text-2xl font-bold ${
-              totalRealizedPL >= 0 ? "text-green-500" : "text-red-500"
-            }`}
-          >
+          <p className={`text-2xl font-bold ${totalRealizedPL >= 0 ? "text-green-500" : "text-red-500"}`}>
             ${totalRealizedPL.toFixed(2)}
           </p>
         </Card>
@@ -56,8 +48,6 @@ export default function HistoryPage() {
           <p className="text-2xl font-bold text-foreground">{winRate.toFixed(1)}%</p>
         </Card>
       </div>
-
-      {/* Trades Table */}
       <div className="space-y-3">
         {isLoading ? (
           <Card className="p-8 text-center bg-card/50 border-border">
@@ -81,7 +71,7 @@ export default function HistoryPage() {
                 <div>
                   <h3 className="font-semibold text-foreground">{trade.position.pair.name}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {trade.position.direction.toUpperCase()} • {trade.position.volume_lots} lots
+                    {trade.position.direction.toUpperCase()} • {trade.position.volume_lots} lots • {trade.position.time_frame}
                   </p>
                 </div>
                 <div className="text-right">
@@ -97,7 +87,6 @@ export default function HistoryPage() {
                   <p className="text-xs text-muted-foreground capitalize">{trade.close_reason}</p>
                 </div>
               </div>
-
               <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                 <div>
                   <p>
@@ -118,7 +107,7 @@ export default function HistoryPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p>{new Date(trade.close_time).toLocaleDateString()}</p>
+                  <p>{new Date(trade.close_time).toLocaleString()}</p>
                 </div>
               </div>
             </Card>

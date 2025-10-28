@@ -1,7 +1,7 @@
 // hooks/use-forex-data.ts
 import useSWR from "swr"
 import { api } from "@/lib/api"
-import { useMemo } from "react" // Add this import
+import { useMemo } from "react"
 
 export function useForexPairs() {
   const { data, error, mutate } = useSWR("/forex/pairs/", () =>
@@ -36,7 +36,6 @@ export function useCurrentPrice(pairId: number) {
   }
 }
 
-// New Hook for multiple prices
 export function useCurrentPrices(pairIds: number[]) {
   const { data, error, isLoading } = useSWR(
     pairIds.length > 0 ? `/forex/current-prices/?ids=${pairIds.join(",")}` : null,
@@ -49,7 +48,6 @@ export function useCurrentPrices(pairIds: number[]) {
     { refreshInterval: 5000, revalidateOnFocus: true, revalidateIfStale: true }
   )
 
-  // Map pairIds to prices, defaulting to undefined if not fetched yet
   const prices = useMemo(() => {
     if (!data) return {}
     return pairIds.reduce((acc, id) => {

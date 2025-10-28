@@ -42,7 +42,7 @@ export function DashboardHeader() {
   }, [])
 
   const loadAccount = async () => {
-    const { data } = await api.getAccountDetails() as { data: AccountDetailsResponse }
+    const { data } = await (api as any).getAccountDetails() as { data: AccountDetailsResponse }
     if (data) {
       setUser(data.user)
       setBalance(data.user.balance)

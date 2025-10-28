@@ -8,9 +8,10 @@ import { toast } from "sonner";
 
 interface Props {
   pairId: number;
+  timeFrame?: string;
 }
 
-export function TradingViewChart({ pairId }: Props) {
+export function TradingViewChart({ pairId, timeFrame = "D" }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const { pairs, isLoading: pairsLoading, error: pairsError } = useForexPairs();
   const { prices } = usePriceUpdates();

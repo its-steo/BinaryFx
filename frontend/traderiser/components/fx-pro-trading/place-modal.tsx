@@ -9,11 +9,12 @@ import { mutate } from "swr"
 interface Props {
   pairId: number
   direction: "buy" | "sell"
+  timeFrame: string
   onClose: () => void
   onPlaceOrder: () => void
 }
 
-export default function PlaceOrderModal({ pairId, direction: initDir, onClose, onPlaceOrder }: Props) {
+export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame, onClose, onPlaceOrder }: Props) {
   const [direction, setDirection] = useState<"buy" | "sell">(initDir)
   const [volume, setVolume] = useState("0.1")
   const [sl, setSl] = useState("")
@@ -34,11 +35,10 @@ export default function PlaceOrderModal({ pairId, direction: initDir, onClose, o
         tp: tp ? parseFloat(tp) : undefined,
       })
       onPlaceOrder()
-      // Refresh positions and wallet
       mutate("/forex/positions/")
       mutate("/wallet/wallets/")
     } catch (err: any) {
-      setError(err.message || "Failed to place order")
+      setError(err.message || "Failed to place order. Insufficient balance or invalid parameters.")
     } finally {
       setLoading(false)
     }
@@ -96,6 +96,15 @@ export default function PlaceOrderModal({ pairId, direction: initDir, onClose, o
               onChange={(e) => setTp(e.target.value)}
               placeholder="e.g. 1.1000"
               className="w-full px-3 py-2 bg-muted border border-border rounded"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Time Frame</label>
+            <input
+              type="text"
+              value={timeFrame === "M1" ? "1 Minute" : timeFrame === "M5" ? "5 Minutes" : timeFrame === "M15" ? "15 Minutes" : timeFrame === "H1" ? "1 Hour" : timeFrame === "H4" ? "4 Hours" : "24 Hours"}
+              readOnly
+              className="w-full px-3 py-2 bg-muted border border-border rounded text-muted-foreground"
             />
           </div>
           {error && <p className="text-red-500 text-sm">{error}</p>}

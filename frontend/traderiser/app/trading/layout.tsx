@@ -159,7 +159,12 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
         }
         toast.warning("Account switched locally, but server sync failed. Balance may be outdated.");
       } else if (response.data) {
-        console.log("Trading Layout - Switched Account Balance:", response.data.balance);
+        const balance = (response.data as any)?.balance;
+        if (typeof balance !== "undefined") {
+          console.log("Trading Layout - Switched Account Balance:", balance);
+        } else {
+          console.log("Trading Layout - Switch account succeeded (no balance returned)");
+        }
       }
 
       const updatedAccount = {

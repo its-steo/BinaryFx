@@ -56,7 +56,8 @@ export default function DashboardPage() {
           setError(res.error);
           return;
         }
-        setData(res.data);
+        // Cast res.data to DashboardData to satisfy the state setter's expected type
+        setData(res.data as DashboardData);
         const activeType = localStorage.getItem("account_type") || "standard";
         setSelectedAccount(activeType);
         setLoginType(activeType === "demo" ? "demo" : "real");
@@ -91,7 +92,11 @@ export default function DashboardPage() {
 
   const handleCreateProFx = async () => {
     try {
-      const res = await api.createAdditionalAccount({ account_type: "pro-fx" });
+      const apiCreateAdditionalAccount = (api as any).createAdditionalAccount;
+      if (typeof apiCreateAdditionalAccount !== "function") {
+        throw new Error("API method createAdditionalAccount is not available");
+      }
+      const res = await apiCreateAdditionalAccount({ account_type: "pro-fx" });
       if (res.error) throw new Error(res.error);
       showSuccess("Pro-FX account created successfully");
       fetchData(); // Refresh dashboard data
@@ -102,8 +107,8 @@ export default function DashboardPage() {
   };
 
   const isRealAccount = loginType === "real";
-  const selectedAccountData = data?.accounts.find((a) => a.account_type === selectedAccount);
-  const hasProFx = data?.user.accounts.some((acc) => acc.account_type === "pro-fx") || false;
+  const selectedAccountData = data?.accounts?.find((a) => a.account_type === selectedAccount);
+  const hasProFx = data?.user?.accounts?.some((acc) => acc.account_type === "pro-fx") ?? false;
 
   if (loading) {
     return (
@@ -171,7 +176,7 @@ export default function DashboardPage() {
         {/* Balance Card */}
         <BalanceCard
           balance={selectedAccountData?.balance || 0}
-          username={data.user.username}
+          username={data?.user?.username ?? ""}
           isRealAccount={isRealAccount}
           showBalance={showBalance}
           onToggleBalance={() => setShowBalance(!showBalance)}

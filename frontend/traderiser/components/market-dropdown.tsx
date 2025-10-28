@@ -19,7 +19,6 @@ export default function MarketDropdown({ selectedMarket, onSelectMarket }: Marke
   const { pairs, isLoading, error } = useForexPairs()
   const selected = pairs.find((p) => p.id === selectedMarket)
 
-  // Handle errors and notify user
   useEffect(() => {
     if (error) {
       toast.error(`Failed to load markets: ${error.message || "Unknown error"}`)
@@ -27,7 +26,6 @@ export default function MarketDropdown({ selectedMarket, onSelectMarket }: Marke
     }
   }, [error])
 
-  // Refresh pairs on session update or pair addition
   useEffect(() => {
     const handleSessionUpdate = () => {
       console.log("Refreshing pairs due to session update")
@@ -37,12 +35,11 @@ export default function MarketDropdown({ selectedMarket, onSelectMarket }: Marke
     return () => window.removeEventListener("session-updated", handleSessionUpdate)
   }, [])
 
-  // Periodic refresh to catch new pairs
   useEffect(() => {
     const interval = setInterval(() => {
       console.log("Periodic pair refresh")
       mutate("/forex/pairs/", undefined, { revalidate: true })
-    }, 30000) // Refresh every 30 seconds
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
 

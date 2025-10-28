@@ -9,6 +9,7 @@ from .serializers import UserSerializer, AccountSerializer
 from django.conf import settings
 from django.db import transaction
 
+
 class SignupView(APIView):
     permission_classes = [permissions.AllowAny]  # PUBLIC
 
@@ -16,8 +17,9 @@ class SignupView(APIView):
         data = request.data
         email = data.get('email')
         password = data.get('password')
-        username = data.get('username')  # Add username
-        account_type = data.get('account_type', 'standard')  # default
+        username = data.get('username')
+        account_type = data.get('account_type', 'standard')
+        phone = data.get('phone', '')
 
         # Validate required fields
         if not email or not password or not username:
@@ -44,21 +46,9 @@ class SignupView(APIView):
             with transaction.atomic():
                 Account.objects.create(user=user, account_type=account_type)
 
-            refresh = RefreshToken.for_user(user)
-            active_account = user.accounts.filter(account_type=account_type).first()
-            return Response(
-                {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                    'user': UserSerializer(user).data,
-                    'active_account': AccountSerializer(active_account).data
-                },
-                status=status.HTTP_201_CREATED
-            )
-
         except User.DoesNotExist:
             # New user
-            serializer = UserSerializer(data={'email': email, 'username': username})
+            serializer = UserSerializer(data={'email': email, 'username': username, 'phone': phone})
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -66,21 +56,31 @@ class SignupView(APIView):
                 user = serializer.save()
                 user.set_password(password)
                 user.save()
-                # Auto-create demo + standard
+                # Auto-create demo + standard accounts
                 Account.objects.create(user=user, account_type='demo')
                 Account.objects.create(user=user, account_type='standard')
 
-            refresh = RefreshToken.for_user(user)
-            active_account = user.accounts.get(account_type='standard')
+        # Authenticate the user to ensure they are valid
+        user = authenticate(request=request, username=email, password=password)
+        if not user:
             return Response(
-                {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                    'user': UserSerializer(user).data,
-                    'active_account': AccountSerializer(active_account).data
-                },
-                status=status.HTTP_201_CREATED
+                {'error': 'Authentication failed after account creation'},
+                status=status.HTTP_401_UNAUTHORIZED
             )
+
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        active_account = user.accounts.filter(account_type=account_type).first() or user.accounts.get(account_type='standard')
+
+        return Response(
+            {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user).data,
+                'active_account': AccountSerializer(active_account).data
+            },
+            status=status.HTTP_201_CREATED
+        )
         
 class CreateAdditionalAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]

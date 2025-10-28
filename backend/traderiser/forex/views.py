@@ -16,9 +16,6 @@ from django.utils.decorators import method_decorator
 
 logger = logging.getLogger(__name__)
 
-# ----------------------------------------------------------------------
-# 1. List all available forex pairs
-# ----------------------------------------------------------------------
 class ForexPairListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -30,11 +27,8 @@ class ForexPairListView(APIView):
             )
         pairs = ForexPair.objects.all()
         serializer = ForexPairSerializer(pairs, many=True)
-        return Response({'pairs': serializer.data})  # Wrapped in {'pairs': [...]}
+        return Response({'pairs': serializer.data})
 
-# ----------------------------------------------------------------------
-# 2. Place a new market order
-# ----------------------------------------------------------------------
 class PlaceOrderView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -46,59 +40,61 @@ class PlaceOrderView(APIView):
             )
 
         pair_id = request.data.get('pair_id')
-        direction = request.data.get('direction')          # 'buy' or 'sell'
+        direction = request.data.get('direction')  # 'buy' or 'sell'
         volume_lots = Decimal(request.data.get('volume_lots', '0.01'))
         sl = request.data.get('sl')
         tp = request.data.get('tp')
+        time_frame = request.data.get('time_frame', 'M1')  # Default to 1 minute
 
         try:
             pair = ForexPair.objects.get(id=pair_id)
             account = request.user.accounts.get(account_type='pro-fx')
 
-            # ---- Simulated entry price (no external API) ----
-            entry_price = pair.get_current_price()
+            # Simulated entry price
+            entry_price = pair.get_current_price(time_frame=time_frame)
             if entry_price <= 0:
                 return Response(
                     {'error': 'Failed to generate price'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-            # ---- Create the position ----
-            position = Position.objects.create(
-                user=request.user,
-                account=account,
-                pair=pair,
-                direction=direction,
-                volume_lots=volume_lots,
-                entry_price=entry_price,
-                sl=sl,
-                tp=tp,
-                floating_p_l=Decimal('0.00'),
-                status='open',
-                leverage=500  # Default leverage
-            )
-
-            # ---- Margin calc & lock ----
-            margin = position.calculate_margin()
+            # Calculate margin
+            margin = (volume_lots * pair.contract_size * entry_price) / 500  # Using leverage 500
             usd = Currency.objects.get(code='USD')
-            wallet = Wallet.objects.get(
-                account=account,
-                wallet_type='main',
-                currency=usd
-            )
+            wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
+
+            # Check account balance before placing trade
             if wallet.balance < margin:
                 return Response(
-                    {'error': 'Insufficient margin'},
+                    {'error': 'Insufficient balance for margin'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            wallet.balance -= margin
-            wallet.save()
-            Transaction.objects.create(
-                account=account,
-                amount=-margin,
-                transaction_type='margin_lock',
-                description=f'Forex open: {pair.name}'
-            )
+
+            # Create the position
+            with transaction.atomic():
+                position = Position.objects.create(
+                    user=request.user,
+                    account=account,
+                    pair=pair,
+                    direction=direction,
+                    volume_lots=volume_lots,
+                    entry_price=entry_price,
+                    sl=sl,
+                    tp=tp,
+                    floating_p_l=Decimal('0.00'),
+                    status='open',
+                    leverage=500,
+                    time_frame=time_frame
+                )
+
+                wallet.balance -= margin
+                wallet.save()
+                Transaction.objects.create(
+                    account=account,
+                    amount=-margin,
+                    transaction_type='margin_lock',
+                    description=f'Forex open: {pair.name}'
+                )
 
             serializer = PositionSerializer(position)
             return Response({'position': serializer.data}, status=status.HTTP_201_CREATED)

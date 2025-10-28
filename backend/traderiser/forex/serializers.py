@@ -1,3 +1,4 @@
+# forex/serializers.py
 from rest_framework import serializers
 from .models import ForexPair, Position, ForexTrade
 

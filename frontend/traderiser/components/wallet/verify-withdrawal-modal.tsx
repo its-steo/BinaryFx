@@ -49,7 +49,7 @@ export function VerifyWithdrawalModal({ transactionId, onClose, onSuccess, onSet
     try {
       const res = await api.verifyWithdrawal({
         code: otpCode,
-        transaction_id: transactionId,
+        transaction_id: Number(transactionId),
       })
       if (res.error) throw new Error(res.error)
 
@@ -61,7 +61,7 @@ export function VerifyWithdrawalModal({ transactionId, onClose, onSuccess, onSet
     }
   }
 
-  const handleResendOTP = async () => {
+const handleResendOTP = async () => {
   setIsSubmitting(true);
   setError("");
   try {

@@ -32,6 +32,7 @@ export default function Page() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,12 +104,22 @@ export default function Page() {
           {showWithdrawModal && (
             <WithdrawModal
               onClose={() => setShowWithdrawModal(false)}
-              onSuccess={() => setShowWithdrawModal(false)}
+              onSuccess={(txId?: string) => {
+                setShowWithdrawModal(false);
+                if (txId) {
+                  setSelectedTransactionId(txId);
+                }
+                setShowVerifyModal(true);
+              }}
               onSetMessage={setMessage}
             />
           )}
           {showVerifyModal && (
-            <VerifyWithdrawalModal onClose={() => setShowVerifyModal(false)} onSetMessage={setMessage} />
+            <VerifyWithdrawalModal
+              transactionId={selectedTransactionId}
+              onClose={() => setShowVerifyModal(false)}
+              onSetMessage={setMessage}
+            />
           )}
         </div>
       </main>

@@ -61,6 +61,7 @@ export interface Position {
   floating_p_l: number
   status: "open" | "closed"
   entry_time: string
+  time_frame: string
 }
 
 export interface ForexTrade {
@@ -98,6 +99,12 @@ export async function refreshAccessToken(): Promise<string | null> {
     }
   } catch (error) {
     console.error("[v0] Token refresh failed:", error)
+    localStorage.removeItem("access_token")
+    localStorage.removeItem("refresh_token")
+    localStorage.removeItem("account_type")
+    localStorage.removeItem("login_type")
+    localStorage.removeItem("user_session")
+    localStorage.removeItem("active_account_id")
     return null
   }
 }
@@ -119,7 +126,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
       headers,
     })
 
-    if (response.status === 401 && token) {
+    if (response.status === 401 && token && !endpoint.includes("token/refresh/")) {
       const newToken = await refreshAccessToken()
       if (newToken) {
         headers["Authorization"] = `Bearer ${newToken}`
@@ -150,42 +157,72 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
   }
 }
 
-export const signup = (data: { email: string; password: string; account_type?: string }) =>
-  apiRequest("/accounts/signup/", { method: "POST", body: JSON.stringify(data) })
-
-export const login = async (data: { email: string; password: string; account_type: string }) => {
-  const response = await apiRequest("/accounts/login/", {
+export const signup = async (data: {
+  username: string
+  email: string
+  password: string
+  phone?: string
+  account_type: string
+}) => {
+  const response = await apiRequest<{
+    access: string
+    refresh: string
+    user: any
+    active_account: any
+  }>("/accounts/signup/", {
     method: "POST",
     body: JSON.stringify(data),
   })
 
   if (response.data) {
-    const { access_token, refresh_token, user } = response.data
-    if (access_token) {
-      localStorage.setItem("access_token", access_token)
+    localStorage.setItem("access_token", response.data.access)
+    localStorage.setItem("refresh_token", response.data.refresh)
+    localStorage.setItem("account_type", data.account_type)
+    localStorage.setItem("login_type", data.account_type === "demo" ? "demo" : "real")
+    const normalizedUser = {
+      ...response.data.user,
+      accounts: response.data.user.accounts.map((acc: any) => ({
+        ...acc,
+        balance: Number(acc.balance) || 0,
+      })),
     }
-    if (refresh_token) {
-      localStorage.setItem("refresh_token", refresh_token)
+    localStorage.setItem("user_session", JSON.stringify(normalizedUser))
+    const defaultAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === data.account_type) || normalizedUser.accounts[0]
+    if (defaultAccount) {
+      localStorage.setItem("active_account_id", defaultAccount.id.toString())
     }
-    if (user) {
-      if (!user.accounts || !Array.isArray(user.accounts)) {
-        console.error("Login response missing valid accounts:", user)
-        return { error: "Invalid account data from server", status: response.status }
-      }
-      const normalizedUser = {
-        ...user,
-        accounts: user.accounts.map((acc: any) => ({
-          ...acc,
-          balance: Number(acc.balance) || 0,
-        })),
-      }
-      localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-      localStorage.setItem("account_type", data.account_type)
-      localStorage.setItem("login_type", data.account_type === "demo" ? "demo" : "real")
-      const defaultAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === data.account_type) || normalizedUser.accounts[0]
-      if (defaultAccount) {
-        localStorage.setItem("active_account_id", defaultAccount.id.toString())
-      }
+  }
+
+  return response
+}
+
+export const login = async (data: { email: string; password: string; account_type: string }) => {
+  const response = await apiRequest<{
+    access: string
+    refresh: string
+    user: any
+    active_account: any
+  }>("/accounts/login/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+  if (response.data) {
+    localStorage.setItem("access_token", response.data.access)
+    localStorage.setItem("refresh_token", response.data.refresh)
+    localStorage.setItem("account_type", data.account_type)
+    localStorage.setItem("login_type", data.account_type === "demo" ? "demo" : "real")
+    const normalizedUser = {
+      ...response.data.user,
+      accounts: response.data.user.accounts.map((acc: any) => ({
+        ...acc,
+        balance: Number(acc.balance) || 0,
+      })),
+    }
+    localStorage.setItem("user_session", JSON.stringify(normalizedUser))
+    const defaultAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === data.account_type) || normalizedUser.accounts[0]
+    if (defaultAccount) {
+      localStorage.setItem("active_account_id", defaultAccount.id.toString())
     }
   }
 
@@ -193,7 +230,7 @@ export const login = async (data: { email: string; password: string; account_typ
 }
 
 export const createAdditionalAccount = async (data: { account_type: string }) => {
-  const response = await apiRequest("/accounts/account/create/", {
+  const response = await apiRequest<{ user: any; active_account: any }>("/accounts/account/create/", {
     method: "POST",
     body: JSON.stringify(data),
   })
@@ -222,7 +259,7 @@ export const createAdditionalAccount = async (data: { account_type: string }) =>
 export const getAccount = () => apiRequest("/accounts/account/")
 
 export const switchAccount = async (data: { account_id: number }) => {
-  const response = await apiRequest("/accounts/wallet/switch/", {
+  const response = await apiRequest<{ user: any; account: any }>("/accounts/wallet/switch/", {
     method: "POST",
     body: JSON.stringify(data),
   })
@@ -287,7 +324,7 @@ export const getSubscription = () => apiRequest("/bots/subscription/")
 export const subscribe = () => apiRequest("/bots/subscription/", { method: "POST" })
 
 export const getDashboard = async () => {
-  const response = await apiRequest("/dashboard/")
+  const response = await apiRequest<{ user?: any }>("/dashboard/")
   if (response.data) {
     const { user } = response.data
     if (user && user.accounts && Array.isArray(user.accounts)) {
@@ -359,9 +396,8 @@ export const getForexPositions = () => apiRequest<{ positions: Position[] }>("/f
 export const closeForexPosition = (positionId: number) =>
   apiRequest<{ message: string }>(`/forex/positions/${positionId}/close/`, { method: "POST" })
 
-
 export const closeAllPositions = () =>
-  apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" });
+  apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" })
 
 export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
 
@@ -396,7 +432,6 @@ export const api = {
   getMpesaNumber,
   setMpesaNumber,
   resendOTP,
-  createAdditionalAccount,
   getForexPairs,
   getForexCurrentPrices,
   getForexCurrentPrice,

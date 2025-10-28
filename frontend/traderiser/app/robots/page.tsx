@@ -5,18 +5,17 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { RobotMarketplace } from "@/components/robots/robot-marketplace";
 import { UserRobots } from "@/components/robots/user-robots";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatCurrency } from "@/lib/format-currency"
-
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { formatCurrency } from "@/lib/format-currency";
 
 interface DashboardData {
   user: { username: string };
-  accounts: Array<{ account_type: string; balance: number }>;
+  accounts: Array<{ id: number; account_type: string; balance: number }>;
 }
 
 export default function RobotsPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [balance, setBalance] = useState<number>(0);
+  const [activeAccount, setActiveAccount] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,21 +28,16 @@ export default function RobotsPage() {
         const dashboard = data as DashboardData;
         setDashboardData(dashboard);
 
-        const accountType = localStorage.getItem("account_type") || "standard";
-        const account = dashboard.accounts.find((a) => a.account_type === accountType);
-        const bal = account?.balance || 0;
-        setBalance(bal);
+        const activeId = localStorage.getItem("active_account_id");
+        const account = dashboard.accounts.find((a) => a.id === Number(activeId)) ||
+                       dashboard.accounts.find((a) => a.account_type === "standard") ||
+                       dashboard.accounts[0];
 
-        // Update session
-        localStorage.setItem(
-          "user_session",
-          JSON.stringify({
-            username: dashboard.user.username,
-            balance: bal,
-            accountType: accountType === "standard" ? "real" : "demo",
-          })
-        );
-        window.dispatchEvent(new Event("custom-storage-change"));
+        if (!account) {
+          throw new Error("No valid account found");
+        }
+
+        setActiveAccount(account);
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -52,6 +46,8 @@ export default function RobotsPage() {
     };
 
     fetchData();
+    window.addEventListener("session-updated", fetchData);
+    return () => window.removeEventListener("session-updated", fetchData);
   }, []);
 
   if (loading) {
@@ -69,7 +65,7 @@ export default function RobotsPage() {
     return (
       <div className="flex items-center justify-center min-h-screen text-red-400">
         <div className="text-center max-w-md p-6">
-          <div className="text-6xl mb-4">Warning</div>
+          <div className="text-6xl mb-4">⚠️</div>
           <h2 className="text-xl font-bold mb-2">Error</h2>
           <p className="mb-6">{error}</p>
           <button
@@ -94,7 +90,7 @@ export default function RobotsPage() {
       {/* Balance Card */}
       <div className="rounded-2xl p-6 bg-white/10 backdrop-blur-md border border-white/20">
         <p className="text-sm text-white/60 mb-2">Account Balance</p>
-        <p className="text-4xl font-bold">${formatCurrency(balance)}</p>
+        <p className="text-4xl font-bold">${formatCurrency(activeAccount?.balance || 0)}</p>
       </div>
 
       {/* Tabs */}
@@ -115,7 +111,21 @@ export default function RobotsPage() {
         </TabsList>
 
         <TabsContent value="marketplace">
-          <RobotMarketplace balance={balance} onBalanceChange={setBalance} />
+          <RobotMarketplace
+            balance={activeAccount?.balance || 0}
+            onBalanceChange={(newBalance: number) => {
+              setActiveAccount({ ...activeAccount, balance: newBalance });
+              const userSession = JSON.parse(localStorage.getItem("user_session") || "{}");
+              const updatedSession = {
+                ...userSession,
+                accounts: userSession.accounts.map((acc: any) =>
+                  acc.id === activeAccount.id ? { ...acc, balance: newBalance } : acc
+                ),
+              };
+              localStorage.setItem("user_session", JSON.stringify(updatedSession));
+              window.dispatchEvent(new Event("session-updated"));
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="my-robots">

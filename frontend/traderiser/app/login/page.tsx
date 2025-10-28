@@ -64,14 +64,11 @@ export default function LoginPage() {
       }
 
       if (response.data) {
-        localStorage.setItem("access_token", response.data.access)
-        localStorage.setItem("refresh_token", response.data.refresh)
-        localStorage.setItem("account_type", accountType)
         setSuccess(true)
         router.push("/dashboard")
       }
     } catch (err) {
-      setError("An error occurred. Please try again.")
+      setError("Invalid credentials or server error. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -86,10 +83,9 @@ export default function LoginPage() {
             <CardDescription className="text-white/70">You have successfully logged in</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Add icon in success state for consistency */}
             <div className="flex items-center justify-center gap-4 mb-6">
               <div className="flex-shrink-0">
-                <div className={`w-16 h-16 rounded-full  ${accountType === 'standard' ? 'from-orange-400 to-orange-500' : 'from-blue-400 to-blue-500'} flex items-center justify-center overflow-hidden shadow-md`}>
+                <div className={`w-16 h-16 rounded-full ${accountType === 'standard' ? 'from-orange-400 to-orange-500' : 'from-blue-400 to-blue-500'} flex items-center justify-center overflow-hidden shadow-md`}>
                   <Image
                     src={accountType === 'standard' ? "/real-account-icon.png" : "/demo-account-icon.png"}
                     alt={accountType === 'standard' ? "Real Account" : "Demo Account"}
@@ -135,11 +131,10 @@ export default function LoginPage() {
           </Link>
           <CardTitle className="text-2xl text-white">Log In</CardTitle>
           <CardDescription className="text-white/70">
-            Access your {accountType === "demo" ? "Demo" : "Real"} trading account
+            {accountType === 'standard' ? "Access your real trading account" : "Practice with your demo account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Add icon section */}
           <div className="flex items-center gap-4 mb-6">
             <div className="flex-shrink-0">
               <div className={`w-10 h-10 rounded-full ${accountType === 'standard' ? 'from-orange-400 to-orange-500' : 'from-blue-400 to-blue-500'} flex items-center justify-center overflow-hidden shadow-md`}>
@@ -154,7 +149,9 @@ export default function LoginPage() {
             </div>
             <div>
               <h3 className="text-xl font-bold text-white">{accountType === 'standard' ? "Real Account" : "Demo Account"}</h3>
-              <p className="text-sm text-white/70">{accountType === 'standard' ? "Trade with real money and earn real profits." : "Practice trading with $10,000 virtual balance."}</p>
+              <p className="text-sm text-white/70">
+                {accountType === 'standard' ? "Trade with real money and earn real profits." : "Practice trading with $10,000 virtual balance."}
+              </p>
             </div>
           </div>
 

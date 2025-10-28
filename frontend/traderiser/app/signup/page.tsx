@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Zap } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { useState } from "react"
 import Image from "next/image"
 import { api } from "@/lib/api"
@@ -81,14 +81,11 @@ export default function SignupPage() {
       }
 
       if (response.data) {
-        localStorage.setItem("access_token", response.data.access)
-        localStorage.setItem("refresh_token", response.data.refresh)
-        localStorage.setItem("account_type", accountType)
         setSuccess(true)
         router.push("/dashboard")
       }
     } catch (err) {
-      setError("An error occurred. Please try again.")
+      setError("Failed to create account. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -140,7 +137,7 @@ export default function SignupPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex items-center gap-4 mb-4">
               <div className="flex-shrink-0">
-                <div className="w-14 h-14 rounded-full  items-center justify-center overflow-hidden">
+                <div className="w-14 h-14 rounded-full items-center justify-center overflow-hidden">
                   <Image src={iconPath} alt={accountLabel} width={48} height={48} className="object-cover" />
                 </div>
               </div>
