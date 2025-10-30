@@ -5,7 +5,23 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
-import  {toast}  from "sonner";
+import { toast } from "sonner";
+
+interface Account {
+  id: number;
+  account_type: string;
+  balance: number;
+  kyc_verified?: boolean;
+}
+
+interface User {
+  username: string;
+  email: string;
+  phone: string;
+  is_sashi: boolean;
+  is_email_verified: boolean;
+  accounts: Account[];
+}
 
 interface RobotsLayoutProps {
   children: React.ReactNode;
@@ -13,8 +29,8 @@ interface RobotsLayoutProps {
 
 export default function RobotsLayout({ children }: RobotsLayoutProps) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
-  const [activeAccount, setActiveAccount] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,15 +52,14 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
       }
 
       try {
-        const data = JSON.parse(raw);
+        const data: User = JSON.parse(raw);
         if (!data || !data.accounts || !Array.isArray(data.accounts)) {
           throw new Error("Invalid session data: accounts missing or not an array");
         }
 
-        // Ensure balance is a number
-        const normalizedUser = {
+        const normalizedUser: User = {
           ...data,
-          accounts: data.accounts.map((acc: any) => ({
+          accounts: data.accounts.map((acc: Account) => ({
             ...acc,
             balance: Number(acc.balance) || 0,
           })),
@@ -53,9 +68,10 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
         setIsLoggedIn(true);
         setUser(normalizedUser);
         const activeId = localStorage.getItem("active_account_id");
-        const account = normalizedUser.accounts.find((acc: any) => acc.id === Number(activeId)) ||
-                       normalizedUser.accounts.find((acc: any) => acc.account_type === "standard") ||
-                       normalizedUser.accounts[0];
+        const account =
+          normalizedUser.accounts.find((acc: Account) => acc.id === Number(activeId)) ||
+          normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") ||
+          normalizedUser.accounts[0];
 
         if (!account) {
           throw new Error("No valid account found in session data");
@@ -89,14 +105,6 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
     window.location.href = "/login";
   };
 
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
-  }
-
-  if (error) {
-    return <div className="min-h-screen flex items-center justify-center text-red-400">{error}</div>;
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-black text-white">
       <TopNavbar
@@ -106,7 +114,7 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
         showBalance={true}
         activeAccount={activeAccount}
         accounts={user?.accounts || []}
-        onSwitchAccount={(account) => {
+        onSwitchAccount={(account: Account) => {
           localStorage.setItem("active_account_id", account.id.toString());
           localStorage.setItem("account_type", account.account_type);
           setActiveAccount(account);
@@ -115,7 +123,10 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
         onLogout={handleLogout}
       />
       <div className="flex flex-1">
-        <Sidebar loginType={activeAccount?.account_type === "demo" ? "demo" : "real"} activeAccount={activeAccount} />
+        <Sidebar
+          loginType={activeAccount?.account_type === "demo" ? "demo" : "real"}
+          activeAccount={activeAccount}
+        />
         <main className="flex-1 w-full overflow-auto md:pl-64">{children}</main>
       </div>
     </div>

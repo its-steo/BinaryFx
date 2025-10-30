@@ -1,18 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CheckCircle, XCircle, Clock, X } from "lucide-react"
+import { CheckCircle, XCircle, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { api } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/format-currency"
 
-
 interface ExecutingTrade {
   id: string
   market: string
-  direction: "buy" | "sell"
+  direction: "buy" | "sell" | "rise" | "fall"
   amount: number
   status: "pending" | "executing" | "completed"
   isWin?: boolean
@@ -41,7 +40,15 @@ interface UserRobot {
 
 interface TradeExecutionQueueProps {
   trades: ExecutingTrade[]
-  onTradeComplete: (tradeId: string, profit: number, isWin: boolean, amount: number, entrySpot?: number, exitSpot?: number, currentSpot?: number) => void
+  onTradeComplete: (
+    tradeId: string,
+    profit: number,
+    isWin: boolean,
+    amount: number,
+    entrySpot?: number,
+    exitSpot?: number,
+    currentSpot?: number,
+  ) => void
   onStopTrading?: () => void
   onClose?: () => void
   isVisible?: boolean
@@ -53,6 +60,21 @@ interface TradeExecutionQueueProps {
   accountType: string
 }
 
+interface TradeData {
+  profit: number | string
+  is_win: boolean
+  entry_spot?: string | number
+  exit_spot?: string | number
+  current_spot?: string | number
+}
+
+interface ApiTradeResponse {
+  error?: string
+  data?: {
+    trades: TradeData[]
+  }
+}
+
 export function TradeExecutionQueue({
   trades,
   onTradeComplete,
@@ -61,7 +83,6 @@ export function TradeExecutionQueue({
   isVisible = true,
   totalSessionProfit = 0,
   isTradingActive = true,
-  isSessionActive = true,
   userRobots,
   selectedRobot,
   accountType,
@@ -70,34 +91,35 @@ export function TradeExecutionQueue({
   const [localTrades, setLocalTrades] = useState<ExecutingTrade[]>([])
   const [message, setMessage] = useState<{ text: string; isProfit: boolean } | null>(null)
   const [baseTradeParams, setBaseTradeParams] = useState<ExecutingTrade | null>(null)
-  const maxLevels = 5  // Matches backend safety
-  const martingaleMultiplier = 2  // Matches backend default
+  const [targetProfitReached, setTargetProfitReached] = useState(false)
+  const maxLevels = 5
+  const martingaleMultiplier = 2
 
   useEffect(() => {
     if (trades.length > 0) {
       const newTrade = trades[trades.length - 1]
-      setLocalTrades(prev =>
-        prev.some(t => t.id === newTrade.id)
+      setLocalTrades((prev) =>
+        prev.some((t) => t.id === newTrade.id)
           ? prev
-          : [...prev, { ...newTrade, timeLeft: newTrade.status === "pending" ? 5 : newTrade.timeLeft }]
+          : [...prev, { ...newTrade, timeLeft: newTrade.status === "pending" ? 5 : newTrade.timeLeft }],
       )
       if (!baseTradeParams) {
         setBaseTradeParams(newTrade)
+        setTargetProfitReached(false)
       }
     } else {
       setLocalTrades([])
       setBaseTradeParams(null)
+      setTargetProfitReached(false)
     }
   }, [trades, baseTradeParams])
 
   useEffect(() => {
-    const processTrades = async () => {
-      if (!isTradingActive || !baseTradeParams) return
-
-      // ✅ Check target profit and stop loss BEFORE processing
+    if (baseTradeParams && !targetProfitReached) {
       if (baseTradeParams.targetProfit > 0 && totalSessionProfit >= baseTradeParams.targetProfit) {
+        setTargetProfitReached(true)
         const robotName = selectedRobot
-          ? userRobots.find(r => r.robot.id === selectedRobot)?.robot.name || "Robot"
+          ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name || "Robot"
           : null
         setMessage({
           text: robotName
@@ -109,6 +131,7 @@ export function TradeExecutionQueue({
         return
       }
       if (baseTradeParams.stopLoss > 0 && totalSessionProfit <= -baseTradeParams.stopLoss) {
+        setTargetProfitReached(true)
         setMessage({
           text: `Stop loss reached. Loss: $${Math.abs(totalSessionProfit).toFixed(2)}. Try again next round!`,
           isProfit: false,
@@ -116,49 +139,49 @@ export function TradeExecutionQueue({
         onStopTrading?.()
         return
       }
+    }
+  }, [baseTradeParams, totalSessionProfit, targetProfitReached, selectedRobot, userRobots, onStopTrading])
+
+  useEffect(() => {
+    const processTrades = async () => {
+      if (!isTradingActive || !baseTradeParams) return
 
       // Process all pending trades in sequence
       for (let i = 0; i < localTrades.length; i++) {
         const trade = localTrades[i]
         if (trade.status !== "pending") continue
 
-        // ✅ Martingale amount calculation matches backend exactly
         const currentAmount = trade.amount * Math.pow(martingaleMultiplier, trade.martingale_level)
 
-        // Set status to executing
-        setLocalTrades(prev =>
-          prev.map(t =>
-            t.id === trade.id ? { ...t, status: "executing", timeLeft: 5, amount: currentAmount } : t
-          )
+        setLocalTrades((prev) =>
+          prev.map((t) => (t.id === trade.id ? { ...t, status: "executing", timeLeft: 5, amount: currentAmount } : t)),
         )
 
         try {
-          const response = await api.placeTrade({
+          const response = (await api.placeTrade({
             market_id: trade.market_id,
             trade_type_id: trade.trade_type_id,
             direction: trade.direction,
-            amount: trade.amount,  // Base amount sent, backend applies multiplier
+            amount: trade.amount,
             account_type: accountType,
             use_martingale: trade.use_martingale,
             martingale_level: trade.martingale_level,
             robot_id: trade.robot_id,
-            target_profit: trade.targetProfit,  // Matches backend param
+            target_profit: trade.targetProfit,
             stop_loss: trade.stopLoss,
-          })
+          })) as ApiTradeResponse
 
-          if ((response as any)?.error) {
-            const errMsg = (response as any).error
+          if (response?.error) {
+            const errMsg = response.error
             toast({
               title: "Error",
               description: errMsg,
               variant: "destructive",
             })
-            setLocalTrades(prev =>
-              prev.map(t =>
-                t.id === trade.id
-                  ? { ...t, status: "completed", profit: -currentAmount, isWin: false }
-                  : t
-              )
+            setLocalTrades((prev) =>
+              prev.map((t) =>
+                t.id === trade.id ? { ...t, status: "completed", profit: -currentAmount, isWin: false } : t,
+              ),
             )
             onTradeComplete(trade.id, -currentAmount, false, currentAmount)
             if (typeof errMsg === "string" && errMsg.includes("Insufficient balance")) {
@@ -172,32 +195,31 @@ export function TradeExecutionQueue({
             continue
           }
 
-          const apiTrades = (response as any)?.data?.trades
+          const apiTrades = response?.data?.trades
           if (!apiTrades || apiTrades.length === 0) {
             throw new Error("No trade data returned in response")
           }
-          // Since single trade per call, expect one trade
-          const tradeData = apiTrades[0]
 
+          const tradeData = apiTrades[0]
           const profitValue = Number(tradeData.profit)
           if (isNaN(profitValue)) {
             throw new Error("Invalid profit value in trade response")
           }
 
-          setLocalTrades(prev =>
-            prev.map(t =>
+          setLocalTrades((prev) =>
+            prev.map((t) =>
               t.id === trade.id
                 ? {
                     ...t,
                     status: "completed",
                     isWin: tradeData.is_win,
                     profit: profitValue,
-                    entrySpot: tradeData.entry_spot ? parseFloat(tradeData.entry_spot) : undefined,
-                    exitSpot: tradeData.exit_spot ? parseFloat(tradeData.exit_spot) : undefined,
-                    currentSpot: tradeData.current_spot ? parseFloat(tradeData.current_spot) : undefined,
+                    entrySpot: tradeData.entry_spot ? Number.parseFloat(String(tradeData.entry_spot)) : undefined,
+                    exitSpot: tradeData.exit_spot ? Number.parseFloat(String(tradeData.exit_spot)) : undefined,
+                    currentSpot: tradeData.current_spot ? Number.parseFloat(String(tradeData.current_spot)) : undefined,
                   }
-                : t
-            )
+                : t,
+            ),
           )
 
           onTradeComplete(
@@ -205,68 +227,44 @@ export function TradeExecutionQueue({
             profitValue,
             tradeData.is_win,
             currentAmount,
-            tradeData.entry_spot ? parseFloat(tradeData.entry_spot) : undefined,
-            tradeData.exit_spot ? parseFloat(tradeData.exit_spot) : undefined,
-            tradeData.current_spot ? parseFloat(tradeData.current_spot) : undefined
+            tradeData.entry_spot ? Number.parseFloat(String(tradeData.entry_spot)) : undefined,
+            tradeData.exit_spot ? Number.parseFloat(String(tradeData.exit_spot)) : undefined,
+            tradeData.current_spot ? Number.parseFloat(String(tradeData.current_spot)) : undefined,
           )
 
           const updatedProfit = totalSessionProfit + profitValue
 
-          // ✅ Check target profit and stop loss AFTER trade completion
-          if (baseTradeParams.targetProfit > 0 && updatedProfit >= baseTradeParams.targetProfit) {
-            const robotName = selectedRobot
-              ? userRobots.find(r => r.robot.id === selectedRobot)?.robot.name || "Robot"
-              : null
-            setMessage({
-              text: robotName
-                ? `Congratulations, ${robotName} has printed $${formatCurrency(updatedProfit)} successfully.`
-                : `Congratulations, target profit of $${formatCurrency(baseTradeParams.targetProfit)} attained! Profit: $${formatCurrency(updatedProfit)}`,
-              isProfit: true,
-            })
-            onStopTrading?.()
-            return
-          } else if (baseTradeParams.stopLoss > 0 && updatedProfit <= -baseTradeParams.stopLoss) {
-            setMessage({
-              text: `Stop loss reached. Loss: $${Math.abs(updatedProfit).toFixed(2)}. Try again next round!`,
-              isProfit: false,
-            })
-            onStopTrading?.()
-            return
-          }
-
-          // ✅ Queue next trade if trading active (martingale only on loss, reset on win)
           if (isTradingActive) {
             let nextMartingaleLevel = 0
             let nextAmount = baseTradeParams.amount
             if (trade.use_martingale && !tradeData.is_win && trade.martingale_level + 1 < maxLevels) {
               nextMartingaleLevel = trade.martingale_level + 1
-              nextAmount = baseTradeParams.amount  // Base amount; backend will multiply
-            }  // On win, level resets to 0 automatically
+              nextAmount = baseTradeParams.amount
+            }
             const nextTradeId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-            const nextTrade = {
+            const nextTrade: ExecutingTrade = {
               ...baseTradeParams,
               id: nextTradeId,
               amount: nextAmount,
-              status: "pending" as const,
+              status: "pending",
               martingale_level: nextMartingaleLevel,
             }
-            setLocalTrades(prev => [...prev, nextTrade])
+            setLocalTrades((prev) => [...prev, nextTrade])
           }
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Failed to execute trade"
           toast({
             title: "Error",
-            description: error.response?.data?.error || "Failed to execute trade",
+            description: errorMessage,
             variant: "destructive",
           })
-          setLocalTrades(prev =>
-            prev.map(t =>
-              t.id === trade.id
-                ? { ...t, status: "completed", profit: -currentAmount, isWin: false }
-                : t
-            )
+          setLocalTrades((prev) =>
+            prev.map((t) =>
+              t.id === trade.id ? { ...t, status: "completed", profit: -currentAmount, isWin: false } : t,
+            ),
           )
           onTradeComplete(trade.id, -currentAmount, false, currentAmount)
-          if (error.response?.data?.error?.includes("Insufficient balance")) {
+          if (errorMessage.includes("Insufficient balance")) {
             setMessage({
               text: "Insufficient balance. Trading stopped.",
               isProfit: false,
@@ -279,26 +277,36 @@ export function TradeExecutionQueue({
     }
 
     processTrades()
-  }, [localTrades, isTradingActive, baseTradeParams, totalSessionProfit, selectedRobot, userRobots, onTradeComplete, onStopTrading, toast, accountType])
+  }, [
+    localTrades,
+    isTradingActive,
+    baseTradeParams,
+    totalSessionProfit,
+    selectedRobot,
+    userRobots,
+    onTradeComplete,
+    onStopTrading,
+    toast,
+    accountType,
+  ])
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setLocalTrades(prev =>
-        prev.map(trade =>
+      setLocalTrades((prev) =>
+        prev.map((trade) =>
           trade.status === "executing" && trade.timeLeft && trade.timeLeft > 0
             ? { ...trade, timeLeft: trade.timeLeft - 1 }
-            : trade
-        )
+            : trade,
+        ),
       )
     }, 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // Calculate stats
-  const completedTrades = localTrades.filter(t => t.status === "completed")
+  const completedTrades = localTrades.filter((t) => t.status === "completed")
   const totalContracts = completedTrades.length
-  const wins = completedTrades.filter(t => t.isWin).length
-  const losses = completedTrades.filter(t => !t.isWin).length
+  const wins = completedTrades.filter((t) => t.isWin).length
+  const losses = completedTrades.filter((t) => !t.isWin).length
 
   if (!isVisible) return null
 
@@ -372,7 +380,7 @@ export function TradeExecutionQueue({
         </div>
         <div className="max-h-96 overflow-y-auto p-4 sm:p-6 space-y-4">
           <AnimatePresence>
-            {localTrades.map(trade => (
+            {localTrades.map((trade) => (
               <motion.div
                 key={trade.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -382,7 +390,8 @@ export function TradeExecutionQueue({
               >
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-semibold text-white">
-                    {trade.market} ({trade.direction.toUpperCase()}) {trade.martingale_level > 0 ? `(Martingale Level ${trade.martingale_level})` : ""}
+                    {trade.market} ({trade.direction.toUpperCase()}){" "}
+                    {trade.martingale_level > 0 ? `(Martingale Level ${trade.martingale_level})` : ""}
                   </span>
                   <span className="text-xs text-white/60">Trade ID: {trade.id}</span>
                 </div>
@@ -393,7 +402,12 @@ export function TradeExecutionQueue({
                 {trade.entrySpot !== undefined && (
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-white/60">Entry Spot:</span>
-                    <span className="text-white">{(typeof trade.entrySpot === 'number' ? trade.entrySpot : parseFloat(trade.entrySpot || '0')).toFixed(2)}</span>
+                    <span className="text-white">
+                      {(typeof trade.entrySpot === "number"
+                        ? trade.entrySpot
+                        : Number.parseFloat(trade.entrySpot || "0")
+                      ).toFixed(2)}
+                    </span>
                   </div>
                 )}
                 {trade.status === "executing" && trade.timeLeft !== undefined && (
@@ -411,13 +425,11 @@ export function TradeExecutionQueue({
                       transition={{ duration: 0.5 }}
                     >
                       {trade.isWin ? "WIN" : "LOSS"} • $
-                      {typeof trade.profit === 'number' && !isNaN(trade.profit) ? trade.profit.toFixed(2) : '0.00'}
+                      {typeof trade.profit === "number" && !isNaN(trade.profit) ? trade.profit.toFixed(2) : "0.00"}
                     </motion.span>
                   </div>
                 )}
-                {trade.status === "pending" && (
-                  <div className="text-xs text-white/60">Waiting...</div>
-                )}
+                {trade.status === "pending" && <div className="text-xs text-white/60">Waiting...</div>}
               </motion.div>
             ))}
           </AnimatePresence>
@@ -426,11 +438,11 @@ export function TradeExecutionQueue({
           <div className="flex justify-between items-center">
             <p className="text-xs text-white/60">Trades execute in less than 5 seconds</p>
             <div className="text-sm font-bold">
-                <span className="text-white/60">Profit/Loss: </span>
-                <span className={totalSessionProfit >= 0 ? "text-green-400" : "text-red-400"}>
-                  {formatCurrency(totalSessionProfit)}
-                </span>
-              </div>
+              <span className="text-white/60">Profit/Loss: </span>
+              <span className={totalSessionProfit >= 0 ? "text-green-400" : "text-red-400"}>
+                {formatCurrency(totalSessionProfit)}
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>

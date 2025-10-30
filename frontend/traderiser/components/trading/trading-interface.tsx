@@ -17,8 +17,19 @@ interface TradingInterfaceProps {
   onSessionProfitChange: (profit: number) => void
   tradingMode?: "manual" | "robot"
   selectedRobot?: number | null
-  onStartTrading?: (params: any) => void
-  accountType: string // Added prop
+  onStartTrading?: (params: {
+    market_id: number
+    trade_type_id: number
+    direction: string
+    amount: number
+    account_type: string
+    use_martingale: boolean
+    martingale_level: number
+    targetProfit: number
+    stopLoss: number
+    profit: number
+  }) => void
+  accountType: string
 }
 
 interface TradeType {
@@ -36,7 +47,7 @@ export function TradingInterface({
   tradingMode = "manual",
   selectedRobot,
   onStartTrading,
-  accountType, // Added
+  accountType,
 }: TradingInterfaceProps) {
   const { toast } = useToast()
   const [tradeTypes, setTradeTypes] = useState<TradeType[]>([])
@@ -75,7 +86,7 @@ export function TradingInterface({
     }
   }
 
-  const selectedTradeTypeName = tradeTypes.find(t => t.id === selectedTradeType)?.name
+  const selectedTradeTypeName = tradeTypes.find((t) => t.id === selectedTradeType)?.name
   const { primary: primaryLabel, secondary: secondaryLabel } = getDirectionLabels(selectedTradeTypeName)
 
   // Reset direction when trade type changes
@@ -84,33 +95,33 @@ export function TradingInterface({
   }, [selectedTradeType, primaryLabel])
 
   const handlePlaceTrade = async () => {
-  setIsLoading(true)
-  try {
-    const marketObj = markets.find(m => m.name === selectedMarket)
-    if (!marketObj || !selectedTradeType || !amount) {
-      throw new Error("Missing required fields")
-    }
-    const amountNum = parseFloat(amount)
-    if (isNaN(amountNum)) {
-      throw new Error("Invalid amount")
-    }
-    if (amountNum < 0.5) {
-      throw new Error("Minimum trade amount is 0.5 USD")
-    }
-    if (amountNum > balance) {
-      throw new Error("Insufficient balance")
-    }
-    
+    setIsLoading(true)
+    try {
+      const marketObj = markets.find((m) => m.name === selectedMarket)
+      if (!marketObj || !selectedTradeType || !amount) {
+        throw new Error("Missing required fields")
+      }
+      const amountNum = Number.parseFloat(amount)
+      if (isNaN(amountNum)) {
+        throw new Error("Invalid amount")
+      }
+      if (amountNum < 0.5) {
+        throw new Error("Minimum trade amount is 0.5 USD")
+      }
+      if (amountNum > balance) {
+        throw new Error("Insufficient balance")
+      }
+
       const params = {
         market_id: marketObj.id,
         trade_type_id: selectedTradeType,
         direction,
         amount: amountNum,
-        account_type: accountType, // Use prop
+        account_type: accountType,
         use_martingale: useMartingale,
         martingale_level: 0,
-        targetProfit: parseFloat(targetProfit) || 0,
-        stopLoss: parseFloat(stopLoss) || 0,
+        targetProfit: Number.parseFloat(targetProfit) || 0,
+        stopLoss: Number.parseFloat(stopLoss) || 0,
       }
 
       const response = await api.placeTrade(params)
@@ -118,13 +129,12 @@ export function TradingInterface({
         throw new Error(response.error)
       }
 
-      // Safely extract profit from response.data (it may be unknown)
       let profit = 0
       const data = response.data
       if (typeof data === "object" && data !== null && "profit" in data) {
-        profit = parseFloat((data as any).profit) || 0
+        profit = Number.parseFloat(String((data as Record<string, unknown>).profit)) || 0
       } else if (typeof data === "string" || typeof data === "number") {
-        profit = parseFloat(String(data)) || 0
+        profit = Number.parseFloat(String(data)) || 0
       }
 
       onBalanceChange(balance - amountNum + profit)
@@ -151,17 +161,14 @@ export function TradingInterface({
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-white mb-2">Market</label>
-        <Select
-          onValueChange={onMarketSelect}
-          value={selectedMarket || ""}
-        >
+        <Select onValueChange={onMarketSelect} value={selectedMarket || ""}>
           <SelectTrigger className="w-full bg-white/5 border-white/20 text-white h-10">
             <SelectValue placeholder="Select market" />
           </SelectTrigger>
           <SelectContent className="bg-black border border-gray-300 shadow-lg">
-            {markets.map(market => (
+            {markets.map((market) => (
               <SelectItem key={market.id} value={market.name}>
-                {market.name} 
+                {market.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -177,7 +184,7 @@ export function TradingInterface({
             <SelectValue placeholder="Select trade type" />
           </SelectTrigger>
           <SelectContent className="bg-black border border-gray-300 shadow-lg">
-            {tradeTypes.map(type => (
+            {tradeTypes.map((type) => (
               <SelectItem key={type.id} value={type.id.toString()}>
                 {type.name}
               </SelectItem>
@@ -215,22 +222,20 @@ export function TradingInterface({
         <Input
           type="number"
           value={amount}
-          onChange={e => setAmount(e.target.value)}
+          onChange={(e) => setAmount(e.target.value)}
           placeholder="Enter amount"
           className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/40 h-10"
           min="1"
           max={balance}
         />
-        <p className="text-xs text-white/50 mt-2">
-          Available: ${formatCurrency(balance)}
-        </p>
+        <p className="text-xs text-white/50 mt-2">Available: ${formatCurrency(balance)}</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-white mb-2">Target Profit (USD)</label>
         <Input
           type="number"
           value={targetProfit}
-          onChange={e => setTargetProfit(e.target.value)}
+          onChange={(e) => setTargetProfit(e.target.value)}
           placeholder="Optional"
           className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/40 h-10"
           min="0"
@@ -241,7 +246,7 @@ export function TradingInterface({
         <Input
           type="number"
           value={stopLoss}
-          onChange={e => setStopLoss(e.target.value)}
+          onChange={(e) => setStopLoss(e.target.value)}
           placeholder="Optional"
           className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/40 h-10"
           min="0"
@@ -252,7 +257,7 @@ export function TradingInterface({
           type="checkbox"
           id="martingale"
           checked={useMartingale}
-          onChange={e => setUseMartingale(e.target.checked)}
+          onChange={(e) => setUseMartingale(e.target.checked)}
           className="w-4 h-4 rounded border-white/20"
         />
         <label htmlFor="martingale" className="text-sm font-medium text-white cursor-pointer">

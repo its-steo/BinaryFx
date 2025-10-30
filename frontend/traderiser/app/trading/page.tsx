@@ -1,5 +1,3 @@
-
-// app/trading/page.tsx
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -14,7 +12,7 @@ import { TradeExecutionQueue } from "@/components/trading/trade-execution-queue"
 import { TradeExecutionBadge } from "@/components/trading/trade-execution-badge"
 import { formatCurrency } from "@/lib/format-currency"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import MarketAnalysis from '@/components/trading/market-analysis'
+import MarketAnalysis from "@/components/trading/market-analysis"
 
 interface Market {
   id: number
@@ -42,56 +40,69 @@ interface DashboardData {
   session_active: boolean
 }
 
+interface TradeParams {
+  market_id: number
+  trade_type_id: number
+  direction: string
+  amount: number
+  account_type: string
+  use_martingale: boolean
+  martingale_level: number
+  targetProfit: number
+  stopLoss: number
+  profit: number
+}
+
 // Map API market names to TradingView-compatible symbols
 const mapToTradingViewSymbol = (market: string): string => {
   const tradingViewPrefixes: { [key: string]: string } = {
     // Forex Major Pairs
-    EURUSD: 'OANDA:EURUSD',
-    USDJPY: 'OANDA:USDJPY',
-    GBPUSD: 'OANDA:GBPUSD',
-    USDCHF: 'OANDA:USDCHF',
-    AUDUSD: 'OANDA:AUDUSD',
-    USDCAD: 'OANDA:USDCAD',
-    NZDUSD: 'OANDA:NZDUSD',
+    EURUSD: "OANDA:EURUSD",
+    USDJPY: "OANDA:USDJPY",
+    GBPUSD: "OANDA:GBPUSD",
+    USDCHF: "OANDA:USDCHF",
+    AUDUSD: "OANDA:AUDUSD",
+    USDCAD: "OANDA:USDCAD",
+    NZDUSD: "OANDA:NZDUSD",
     // Crypto Major Pairs
-    BTCUSDT: 'BINANCE:BTCUSDT',
-    ETHUSDT: 'BINANCE:ETHUSDT',
-    BTCUSD: 'COINBASE:BTCUSD',
-    ETHUSD: 'COINBASE:ETHUSD',
-    XRPUSDT: 'BINANCE:XRPUSDT',
-    SOLUSDT: 'BINANCE:SOLUSDT',
-    BNBUSDT: 'BINANCE:BNBUSDT',
-    DOGEUSDT: 'BINANCE:DOGEUSDT',
-    ADAUSDT: 'BINANCE:ADAUSDT',
-    TRXUSDT: 'BINANCE:TRXUSDT',
+    BTCUSDT: "BINANCE:BTCUSDT",
+    ETHUSDT: "BINANCE:ETHUSDT",
+    BTCUSD: "COINBASE:BTCUSD",
+    ETHUSD: "COINBASE:ETHUSD",
+    XRPUSDT: "BINANCE:XRPUSDT",
+    SOLUSDT: "BINANCE:SOLUSDT",
+    BNBUSDT: "BINANCE:BNBUSDT",
+    DOGEUSDT: "BINANCE:DOGEUSDT",
+    ADAUSDT: "BINANCE:ADAUSDT",
+    TRXUSDT: "BINANCE:TRXUSDT",
     // Stocks (retained from original)
-    AAPL: 'NASDAQ:AAPL',
-  };
-  return tradingViewPrefixes[market] || `OANDA:${market}`;
+    AAPL: "NASDAQ:AAPL",
+  }
+  return tradingViewPrefixes[market] || `OANDA:${market}`
 }
 
 export default function TradingPage() {
   const router = useRouter()
-  
+
   // Prevent duplicate notifications
   const hasShownLoadToast = useRef(false)
   const hasShownStartToast = useRef(false)
-  
+
   // Toast helpers
   const showSuccess = (message: string) => toast.success(message)
   const showError = (message: string) => toast.error(message)
   const showTradeResult = (isWin: boolean, profit: number, amount: number, sessionProfit: number) => {
     if (isWin) {
-      toast.success(`✅ WIN +$${formatCurrency(profit)}`, { 
-        description: `Profit/Loss: $${formatCurrency(sessionProfit)}`  
+      toast.success(`✅ WIN +$${formatCurrency(profit)}`, {
+        description: `Profit/Loss: $${formatCurrency(sessionProfit)}`,
       })
     } else {
-      toast(`❌ LOSS -$${formatCurrency(Math.abs(profit))}`, {  
-        description: `Profit/Loss: $${formatCurrency(sessionProfit)}`  
+      toast(`❌ LOSS -$${formatCurrency(Math.abs(profit))}`, {
+        description: `Profit/Loss: $${formatCurrency(sessionProfit)}`,
       })
     }
   }
-  
+
   // State
   const [startingBalance, setStartingBalance] = useState<number>(0)
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
@@ -156,16 +167,14 @@ export default function TradingPage() {
         setDashboardData(dashboard)
         setMarkets(marketsRes.data as Market[])
         setUserRobots(userRobotsRes.data as UserRobot[])
-        
+
         const accountObj = dashboard.accounts.find(
-          (acc: any) => acc.account_type === selectedAccount
+          (acc: { account_type: string; balance: string | number }) => acc.account_type === selectedAccount,
         )
-        const accountBalance = accountObj && accountObj.balance !== undefined
-          ? Number(accountObj.balance)
-          : 0
-        
+        const accountBalance = accountObj && accountObj.balance !== undefined ? Number(accountObj.balance) : 0
+
         if (isNaN(accountBalance)) throw new Error("Invalid balance value from API")
-        
+
         setStartingBalance(accountBalance)
         setBalance(accountBalance)
         setSessionProfit(0)
@@ -181,17 +190,8 @@ export default function TradingPage() {
     fetchInitialData()
   }, [selectedAccount])
 
-  const handleStartTrading = (tradeParams: {
-    market_id: number
-    trade_type_id: number
-    direction: "buy" | "sell"
-    amount: number
-    use_martingale: boolean
-    martingale_level: number
-    targetProfit: number
-    stopLoss: number
-    profit_multiplier: string
-  }) => {
+  const handleStartTrading = (tradeParams: TradeParams) => {
+    const marketObj = markets.find((m) => m.name === selectedMarket)
     const newTrade = {
       id: Date.now().toString(),
       market: selectedMarket || "NASDAQ:AAPL",
@@ -205,12 +205,12 @@ export default function TradingPage() {
       martingale_level: tradeParams.martingale_level,
       targetProfit: tradeParams.targetProfit,
       stopLoss: tradeParams.stopLoss,
-      profit_multiplier: tradeParams.profit_multiplier,
+      profit_multiplier: marketObj?.profit_multiplier || "1",
     }
-    setExecutingTrades(prev => [...prev, newTrade])
+    setExecutingTrades((prev) => [...prev, newTrade])
     setShowExecutionModal(true)
     setIsAutoTrading(true)
-    
+
     if (!hasShownStartToast.current) {
       hasShownStartToast.current = true
       toast(`🚀 Trading started - $${formatCurrency(tradeParams.amount)} stake`)
@@ -218,32 +218,30 @@ export default function TradingPage() {
   }
 
   const handleTradeExecutionComplete = (
-    tradeId: string, 
-    profit: number, 
-    isWin: boolean, 
-    amount: number, 
-    entrySpot?: number, 
-    exitSpot?: number, 
-    currentSpot?: number
+    tradeId: string,
+    profit: number,
+    isWin: boolean,
+    amount: number,
+    entrySpot?: number,
+    exitSpot?: number,
+    currentSpot?: number,
   ) => {
-    setExecutingTrades(prev =>
-      prev.map(t =>
-        t.id === tradeId
-          ? { ...t, status: "completed", profit, isWin, entrySpot, exitSpot, currentSpot }
-          : t
-      )
+    setExecutingTrades((prev) =>
+      prev.map((t) =>
+        t.id === tradeId ? { ...t, status: "completed", profit, isWin, entrySpot, exitSpot, currentSpot } : t,
+      ),
     )
-    
+
     const newSessionProfit = sessionProfit + profit
     setSessionProfit(newSessionProfit)
     setBalance(startingBalance + newSessionProfit)
-    
+
     showTradeResult(isWin, profit, amount, newSessionProfit)
   }
 
   const handleStopTrading = () => {
     setIsAutoTrading(false)
-    setExecutingTrades(prev => prev.filter(t => t.status === "completed"))
+    setExecutingTrades((prev) => prev.filter((t) => t.status === "completed"))
     setShowExecutionModal(false)
     hasShownStartToast.current = false
     toast.success("🛑 Trading stopped")
@@ -291,7 +289,6 @@ export default function TradingPage() {
   return (
     <div className="bg-gradient-to-br from-black via-black to-black/80 min-h-screen">
       <div className="flex min-h-screen">
-       
         <div className="flex-1 overflow-auto ml-0 lg:ml-64">
           <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
             <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-4 sm:mb-6 md:mb-8">
@@ -301,16 +298,14 @@ export default function TradingPage() {
               <div className="md:col-span-1 lg:col-span-2 xl:col-span-3 space-y-4 sm:space-y-6">
                 <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
                   <p className="text-xs text-white/60 mb-1">Account Balance</p>
-                  <p className="text-lg sm:text-xl font-bold text-green-400 truncate">
-                    ${formatCurrency(balance)}
-                  </p>
+                  <p className="text-lg sm:text-xl font-bold text-green-400 truncate">${formatCurrency(balance)}</p>
                   <p className="text-xs text-white/60 mt-1 flex items-center justify-between">
                     <span>Session P/L:</span>
-                    <span className={`font-mono font-semibold px-2 py-1 rounded-full text-xs ${
-                      sessionProfit >= 0 
-                        ? "bg-green-500/20 text-green-400" 
-                        : "bg-red-500/20 text-red-400"
-                    }`}>
+                    <span
+                      className={`font-mono font-semibold px-2 py-1 rounded-full text-xs ${
+                        sessionProfit >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                      }`}
+                    >
                       ${sessionProfit.toFixed(2)}
                     </span>
                   </p>
@@ -318,17 +313,17 @@ export default function TradingPage() {
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
                     <p className="text-xs text-white/60 mb-1">Session Profit</p>
-                    <p className={`text-lg sm:text-xl font-bold ${
-                      sessionProfit >= 0 ? "text-green-400" : "text-red-400"
-                    } truncate`}>
+                    <p
+                      className={`text-lg sm:text-xl font-bold ${
+                        sessionProfit >= 0 ? "text-green-400" : "text-red-400"
+                      } truncate`}
+                    >
                       ${sessionProfit.toFixed(2)}
                     </p>
                   </div>
                   <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
                     <p className="text-xs text-white/60 mb-1">Trading Mode</p>
-                    <p className="text-lg sm:text-xl font-bold text-pink-400 capitalize">
-                      {tradingMode}
-                    </p>
+                    <p className="text-lg sm:text-xl font-bold text-pink-400 capitalize">{tradingMode}</p>
                   </div>
                 </div>
                 <div className="flex justify-end mb-2">
@@ -343,8 +338,10 @@ export default function TradingPage() {
                   </Select>
                 </div>
                 <div className="w-full">
-                  {chartType === 'tradingview' ? (
-                    <TradingViewWidget symbol={selectedMarket ? mapToTradingViewSymbol(selectedMarket) : 'NASDAQ:AAPL'} />
+                  {chartType === "tradingview" ? (
+                    <TradingViewWidget
+                      symbol={selectedMarket ? mapToTradingViewSymbol(selectedMarket) : "NASDAQ:AAPL"}
+                    />
                   ) : (
                     <MarketAnalysis market={selectedMarket} />
                   )}
@@ -373,12 +370,35 @@ export default function TradingPage() {
                 </div>
               </div>
               <div className="md:col-span-1 lg:col-span-1 xl:col-span-1">
-                <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4 lg:p-6 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4 lg:p-6 sticky top-20 overflow-y-auto">
                   <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4 uppercase tracking-wider">
                     Recent Trades
                   </h3>
-                  <TradeHistory 
-                    sessionTrades={executingTrades.filter(t => t.status === "completed")} 
+                  <TradeHistory
+                    sessionTrades={executingTrades
+                      .filter((t) => t.status === "completed")
+                      .map((t) => ({
+                        id: t.id,
+                        market: t.market,
+                        direction: t.direction,
+                        amount: t.amount,
+                        status: t.status,
+                        // map camelCase to snake_case expected by Trade type
+                        is_win: !!t.isWin,
+                        profit: t.profit ?? 0,
+                        timeLeft: t.timeLeft,
+                        entrySpot: t.entrySpot,
+                        market_id: t.market_id,
+                        trade_type_id: t.trade_type_id,
+                        robot_id: t.robot_id,
+                        use_martingale: t.use_martingale,
+                        martingale_level: t.martingale_level,
+                        targetProfit: t.targetProfit,
+                        stopLoss: t.stopLoss,
+                        profit_multiplier: t.profit_multiplier,
+                        // provide a created_at timestamp expected by the Trade type
+                        created_at: new Date().toISOString(),
+                      }))}
                   />
                 </div>
               </div>
@@ -398,7 +418,7 @@ export default function TradingPage() {
             />
           </div>
           <TradeExecutionBadge
-            activeTradesCount={executingTrades.filter(t => t.status !== "completed").length}
+            activeTradesCount={executingTrades.filter((t) => t.status !== "completed").length}
             onClick={() => setShowExecutionModal(true)}
           />
         </div>

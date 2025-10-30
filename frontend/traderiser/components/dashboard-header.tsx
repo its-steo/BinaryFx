@@ -16,23 +16,22 @@ import {
 import { TrendingUp, User, Settings, LogOut, Wallet, RefreshCw, Star } from "lucide-react"
 import { api } from "@/lib/api"
 
+interface UserData {
+  email: string
+  balance: string
+  account_type?: string
+}
+
+interface AccountResponse {
+  user: UserData
+  demo_account?: {
+    virtual_balance: string
+  }
+}
+
 export function DashboardHeader() {
   const router = useRouter()
-  type User = {
-    email: string
-    balance: string
-    account_type?: string
-    // add other user properties as needed
-  }
-
-  type AccountDetailsResponse = {
-    user: User
-    demo_account: {
-      virtual_balance: string
-    }
-  }
-
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<UserData | null>(null)
   const [balance, setBalance] = useState("0.00")
   const [demoBalance, setDemoBalance] = useState("10000.00")
   const [isDemoAccount, setIsDemoAccount] = useState(false)
@@ -42,11 +41,14 @@ export function DashboardHeader() {
   }, [])
 
   const loadAccount = async () => {
-    const { data } = await (api as any).getAccountDetails() as { data: AccountDetailsResponse }
-    if (data) {
+    const response = await api.getAccount()
+    if (response.data) {
+      const data = response.data as AccountResponse
       setUser(data.user)
       setBalance(data.user.balance)
-      setDemoBalance(data.demo_account.virtual_balance)
+      if (data.demo_account) {
+        setDemoBalance(data.demo_account.virtual_balance)
+      }
     }
   }
 

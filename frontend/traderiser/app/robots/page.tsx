@@ -8,14 +8,29 @@ import { UserRobots } from "@/components/robots/user-robots";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format-currency";
 
+interface Account {
+  id: number;
+  account_type: string;
+  balance: number;
+  kyc_verified?: boolean;
+}
+
+interface User {
+  username: string;
+  email: string;
+  phone: string;
+  is_sashi: boolean;
+  is_email_verified: boolean;
+  accounts: Account[];
+}
+
 interface DashboardData {
-  user: { username: string };
-  accounts: Array<{ id: number; account_type: string; balance: number }>;
+  user: User;
+  accounts: Account[];
 }
 
 export default function RobotsPage() {
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [activeAccount, setActiveAccount] = useState<any>(null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,13 +40,15 @@ export default function RobotsPage() {
         const { data, error: apiError } = await api.getDashboard();
         if (apiError) throw new Error(apiError as string);
 
-        const dashboard = data as DashboardData;
-        setDashboardData(dashboard);
-
+        const dashboard = data as unknown as DashboardData;
+        if (!dashboard || !dashboard.accounts || !Array.isArray(dashboard.accounts)) {
+          throw new Error("Invalid dashboard data");
+        }
         const activeId = localStorage.getItem("active_account_id");
-        const account = dashboard.accounts.find((a) => a.id === Number(activeId)) ||
-                       dashboard.accounts.find((a) => a.account_type === "standard") ||
-                       dashboard.accounts[0];
+        const account =
+          dashboard.accounts.find((a: Account) => a.id === Number(activeId)) ||
+          dashboard.accounts.find((a: Account) => a.account_type === "standard") ||
+          dashboard.accounts[0];
 
         if (!account) {
           throw new Error("No valid account found");
@@ -114,12 +131,14 @@ export default function RobotsPage() {
           <RobotMarketplace
             balance={activeAccount?.balance || 0}
             onBalanceChange={(newBalance: number) => {
-              setActiveAccount({ ...activeAccount, balance: newBalance });
+              if (!activeAccount) return;
+              const updatedAccount = { ...activeAccount, balance: newBalance };
+              setActiveAccount(updatedAccount);
               const userSession = JSON.parse(localStorage.getItem("user_session") || "{}");
-              const updatedSession = {
+              const updatedSession: User = {
                 ...userSession,
-                accounts: userSession.accounts.map((acc: any) =>
-                  acc.id === activeAccount.id ? { ...acc, balance: newBalance } : acc
+                accounts: userSession.accounts.map((acc: Account) =>
+                  acc.id === activeAccount.id ? updatedAccount : acc
                 ),
               };
               localStorage.setItem("user_session", JSON.stringify(updatedSession));

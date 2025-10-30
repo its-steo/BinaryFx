@@ -1,7 +1,7 @@
 // app/fx-pro-trading/page.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import MainPage from "@/components/fx-pro-trading/main-page";
 import ChatPage from "@/components/fx-pro-trading/chat-page";
@@ -10,27 +10,41 @@ import HistoryPage from "@/components/fx-pro-trading/history-page";
 import BottomNavigation from "@/components/bottom-navifation";
 import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
-//import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { usePriceUpdates } from "@/hooks/use-price-updates";
+
+interface Account {
+  id: number;
+  account_type: string;
+  balance: number;
+  kyc_verified?: boolean;
+}
+
+interface User {
+  username: string;
+  email: string;
+  phone: string;
+  is_sashi: boolean;
+  is_email_verified: boolean;
+  accounts: Account[];
+}
 
 export default function TradingApp() {
   const [currentPage, setCurrentPage] = useState("main");
   const [hasProFx, setHasProFx] = useState<boolean | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
-  const [activeAccount, setActiveAccount] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [loginType, setLoginType] = useState<string>("real");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isNavVisible, setIsNavVisible] = useState(true);
-  const lastScrollY = useRef(0);
   const mainRef = useRef<HTMLElement>(null);
   const router = useRouter();
 
   usePriceUpdates();
 
-  const loadSession = async () => {
+  const loadSession = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     const raw = localStorage.getItem("user_session");
@@ -47,14 +61,14 @@ export default function TradingApp() {
     }
 
     try {
-      const data = JSON.parse(raw);
+      const data: User = JSON.parse(raw);
       if (!data || !data.accounts || !Array.isArray(data.accounts)) {
         throw new Error("Invalid session data: accounts missing or not an array");
       }
 
-      const normalizedUser = {
+      const normalizedUser: User = {
         ...data,
-        accounts: data.accounts.map((acc: any) => ({
+        accounts: data.accounts.map((acc: Account) => ({
           ...acc,
           balance: Number(acc.balance) || 0,
         })),
@@ -63,8 +77,8 @@ export default function TradingApp() {
       setIsLoggedIn(true);
       setUser(normalizedUser);
       const activeId = localStorage.getItem("active_account_id");
-      const account = normalizedUser.accounts.find((acc: any) => acc.id === Number(activeId)) ||
-                     normalizedUser.accounts.find((acc: any) => acc.account_type === "pro-fx") ||
+      const account = normalizedUser.accounts.find((acc: Account) => acc.id === Number(activeId)) ||
+                     normalizedUser.accounts.find((acc: Account) => acc.account_type === "pro-fx") ||
                      normalizedUser.accounts[0];
 
       if (!account) {
@@ -74,7 +88,7 @@ export default function TradingApp() {
       setActiveAccount(account);
       setLoginType(account.account_type === "demo" ? "demo" : "real");
 
-      const proFxAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === "pro-fx");
+      const proFxAccount = normalizedUser.accounts.find((acc: Account) => acc.account_type === "pro-fx");
       if (!proFxAccount) {
         setHasProFx(false);
         setError("Pro-FX account required");
@@ -83,17 +97,17 @@ export default function TradingApp() {
         return;
       }
       setHasProFx(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsLoggedIn(false);
       setUser(null);
       setActiveAccount(null);
-      setError(err.message || "Failed to load session data. Please log in again.");
-      toast.error(err.message || "Failed to load session data. Please log in again.");
+      setError((err as Error).message || "Failed to load session data. Please log in again.");
+      toast.error((err as Error).message || "Failed to load session data. Please log in again.");
       router.push("/login");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     loadSession();
@@ -103,17 +117,17 @@ export default function TradingApp() {
     };
     window.addEventListener("session-updated", handleSessionUpdate);
     return () => window.removeEventListener("session-updated", handleSessionUpdate);
-  }, []);
+  }, [loadSession]);
 
-  const handleSwitchAccount = async (account: any) => {
+  const handleSwitchAccount = async (account: Account) => {
     try {
       localStorage.setItem("active_account_id", account.id.toString());
       localStorage.setItem("account_type", account.account_type);
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real");
 
-      const updatedUser = {
-        ...user,
-        accounts: user.accounts.map((acc: any) =>
+      const updatedUser: User = {
+        ...user!,
+        accounts: user!.accounts.map((acc: Account) =>
           acc.id === account.id ? { ...acc, balance: Number(account.balance) || 0 } : acc
         ),
       };
@@ -139,8 +153,8 @@ export default function TradingApp() {
   };
 
   const availableAccounts = loginType === "real"
-    ? (user?.accounts || []).filter((acc: any) => acc.account_type !== "demo")
-    : (user?.accounts || []).filter((acc: any) => acc.account_type === "demo");
+    ? (user?.accounts || []).filter((acc: Account) => acc.account_type !== "demo")
+    : (user?.accounts || []).filter((acc: Account) => acc.account_type === "demo");
 
   if (isLoading || hasProFx === null) {
     return <div className="min-h-screen flex items-center justify-center text-white bg-black">Loading...</div>;

@@ -1,5 +1,5 @@
 // components/dashboard/dashboard-header.tsx
-import { User } from "lucide-react";
+//import { User } from "lucide-react";
 
 interface DashboardHeaderProps {
   username: string;
@@ -11,7 +11,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({
   username,
   email,
-  isRealAccount,
+  //isRealAccount,
   accountType,
 }: DashboardHeaderProps) {
   const displayAccountType =

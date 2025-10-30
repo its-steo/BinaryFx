@@ -3,12 +3,19 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { BarChart3, Zap, LogOut, Menu, X, Wallet as WalletIcon } from "lucide-react"
+import { LayoutDashboard, TrendingUp, LogOut, Menu, X, WalletIcon, Bot, User, Zap } from "lucide-react"
 import { useState, useEffect } from "react"
+
+interface Account {
+  id: number;
+  account_type: string;
+  balance: number;
+  kyc_verified?: boolean;
+}
 
 interface SidebarProps {
   loginType: string
-  activeAccount: any
+  activeAccount: Account | null
 }
 
 export function Sidebar({ loginType, activeAccount }: SidebarProps) {
@@ -21,7 +28,7 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
     const userSession = localStorage.getItem("user_session")
     if (userSession) {
       const user = JSON.parse(userSession)
-      setHasProFxAccount(user?.accounts?.some((acc: any) => acc.account_type === "pro-fx"))
+      setHasProFxAccount(user?.accounts?.some((acc: Account) => acc.account_type === "pro-fx"))
     }
   }, [])
 
@@ -48,26 +55,31 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
   }
 
   // Determine navigation items based on account type
-  const navItems = loginType === "real" && activeAccount
-    ? activeAccount.account_type === "pro-fx"
-      ? [
-          { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
-          { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: BarChart3 },
-          { href: "/wallet", label: "Wallet", icon: WalletIcon },
-        ]
+  const navItems =
+    loginType === "real" && activeAccount
+      ? activeAccount.account_type === "pro-fx"
+        ? [
+            { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+            { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap },
+            { href: "/wallet", label: "Wallet", icon: WalletIcon },
+            { href: "/profile", label: "Profile", icon: User },
+          ]
+        : [
+            { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+            { href: "/trading", label: "Trading", icon: TrendingUp },
+            { href: "/robots", label: "Robots", icon: Bot },
+            { href: "/wallet", label: "Wallet", icon: WalletIcon },
+            { href: "/profile", label: "Profile", icon: User },
+          ]
       : [
-          { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
-          { href: "/trading", label: "Trading", icon: BarChart3 },
-          { href: "/robots", label: "Robots", icon: Zap },
+          { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/trading", label: "Trading", icon: TrendingUp },
+          ...(hasProFxAccount && loginType === "real"
+            ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap }]
+            : []),
+          { href: "/robots", label: "Robots", icon: Bot },
           { href: "/wallet", label: "Wallet", icon: WalletIcon },
         ]
-    : [
-        { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
-        { href: "/trading", label: "Trading", icon: BarChart3 },
-        ...(hasProFxAccount && loginType === "real" ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: BarChart3 }] : []),
-        { href: "/robots", label: "Robots", icon: Zap },
-        { href: "/wallet", label: "Wallet", icon: WalletIcon },
-      ]
 
   return (
     <>
@@ -96,7 +108,7 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
           {activeAccount && (
             <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-lg">
               <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-500 rounded-full flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-white" />
+                <LayoutDashboard className="w-5 h-5 text-white" />
               </div>
               <div>
                 <p className="text-sm font-medium text-white">
@@ -124,10 +136,7 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
                       : "text-white/70 hover:text-white hover:bg-white/5 hover:border hover:border-white/10"
                   }`}
                 >
-                  <Icon
-                    size={20}
-                    className={isActive ? "text-pink-300" : "text-white/70 group-hover:text-white"}
-                  />
+                  <Icon size={20} className={isActive ? "text-pink-300" : "text-white/70 group-hover:text-white"} />
                   <span className="font-medium">{item.label}</span>
                   {isActive && (
                     <div className="ml-auto w-1 h-8 bg-gradient-to-b from-pink-400 to-pink-600 rounded-full" />

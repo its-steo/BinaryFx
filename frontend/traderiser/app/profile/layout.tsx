@@ -1,4 +1,4 @@
-// app/dashboard/layout.tsx
+// app/profile/layout.tsx
 "use client";
 
 import type React from "react";
@@ -23,11 +23,11 @@ interface User {
   accounts: Account[];
 }
 
-interface DashboardLayoutProps {
+interface ProfileLayoutProps {
   children: React.ReactNode;
 }
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function ProfileLayout({ children }: ProfileLayoutProps) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
@@ -58,7 +58,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           throw new Error("Invalid session data: accounts missing or not an array");
         }
 
-        // Ensure balance is a number
         const normalizedUser: User = {
           ...data,
           accounts: data.accounts.map((acc: Account) => ({
@@ -70,9 +69,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         setIsLoggedIn(true);
         setUser(normalizedUser);
         const activeId = localStorage.getItem("active_account_id");
-        const account = normalizedUser.accounts.find((acc: Account) => acc.id === Number(activeId)) ||
-                       normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") ||
-                       normalizedUser.accounts[0];
+        const account =
+          normalizedUser.accounts.find((acc: Account) => acc.id === Number(activeId)) ||
+          normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") ||
+          normalizedUser.accounts[0];
 
         if (!account) {
           throw new Error("No valid account found in session data");
@@ -132,9 +132,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     window.location.href = "/login";
   };
 
-  const availableAccounts = loginType === "real"
-    ? (user?.accounts || []).filter((acc: Account) => acc.account_type !== "demo")
-    : (user?.accounts || []).filter((acc: Account) => acc.account_type === "demo");
+  const availableAccounts: Account[] =
+    loginType === "real"
+      ? (user?.accounts || []).filter((acc: Account) => acc.account_type !== "demo")
+      : (user?.accounts || []).filter((acc: Account) => acc.account_type === "demo");
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;

@@ -8,14 +8,30 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
+interface Account {
+  id: number;
+  account_type: string;
+  balance: number;
+  kyc_verified?: boolean;
+}
+
+interface User {
+  username: string;
+  email: string;
+  phone: string;
+  is_sashi: boolean;
+  is_email_verified: boolean;
+  accounts: Account[];
+}
+
 interface TradingLayoutProps {
   children: React.ReactNode;
 }
 
 export default function TradingLayout({ children }: TradingLayoutProps) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
-  const [activeAccount, setActiveAccount] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [loginType, setLoginType] = useState<string>("real");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,15 +73,15 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
       }
 
       try {
-        const data = JSON.parse(raw);
+        const data: User = JSON.parse(raw);
         if (!data || !data.accounts || !Array.isArray(data.accounts)) {
           throw new Error("Invalid session data: accounts missing or not an array");
         }
 
         // Ensure balance is a number
-        const normalizedUser = {
+        const normalizedUser: User = {
           ...data,
-          accounts: data.accounts.map((acc: any) => ({
+          accounts: data.accounts.map((acc: Account) => ({
             ...acc,
             balance: Number(acc.balance) || 0,
           })),
@@ -76,8 +92,8 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
         const storedAccountType = localStorage.getItem("account_type") || "standard";
         const storedLoginType = localStorage.getItem("login_type") || "real";
         setLoginType(storedLoginType);
-        const account = normalizedUser.accounts.find((acc: any) => acc.account_type === storedAccountType) ||
-                       (storedLoginType === "real" ? normalizedUser.accounts.find((acc: any) => acc.account_type === "standard") : normalizedUser.accounts.find((acc: any) => acc.account_type === "demo")) ||
+        const account = normalizedUser.accounts.find((acc: Account) => acc.account_type === storedAccountType) ||
+                       (storedLoginType === "real" ? normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") : normalizedUser.accounts.find((acc: Account) => acc.account_type === "demo")) ||
                        normalizedUser.accounts[0];
 
         if (!account) {
@@ -128,7 +144,7 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("account_type");
     localStorage.removeItem("user_session");
-    localStorage.removeItem("active_account_id");
+    localStorage.setItem("active_account_id", "");
     localStorage.removeItem("login_type");
     window.dispatchEvent(new Event("custom-storage-change"));
     setIsLoggedIn(false);
@@ -138,7 +154,7 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
     window.location.href = "/login";
   };
 
-  const handleSwitchAccount = async (account: any) => {
+  const handleSwitchAccount = async (account: Account) => {
     console.log("Trading Layout - Switching account to:", account?.id); // Debug log
     if (!account) {
       toast.error("No account selected");
@@ -159,7 +175,7 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
         }
         toast.warning("Account switched locally, but server sync failed. Balance may be outdated.");
       } else if (response.data) {
-        const balance = (response.data as any)?.balance;
+        const balance = (response.data as { balance?: number })?.balance;
         if (typeof balance !== "undefined") {
           console.log("Trading Layout - Switched Account Balance:", balance);
         } else {
@@ -167,7 +183,7 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
         }
       }
 
-      const updatedAccount = {
+      const updatedAccount: Account = {
         ...account,
         balance: Number(account.balance) || 0,
       };
@@ -175,9 +191,9 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
       localStorage.setItem("active_account_id", account.id.toString());
       localStorage.setItem("account_type", account.account_type);
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real");
-      const updatedUser = {
-        ...user,
-        accounts: user.accounts.map((acc: any) =>
+      const updatedUser: User = {
+        ...user!,
+        accounts: user!.accounts.map((acc: Account) =>
           acc.id === account.id ? updatedAccount : { ...acc, balance: Number(acc.balance) || 0 }
         ),
       };
@@ -188,7 +204,7 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
       console.error("Trading Layout - Error switching account:", error);
       toast.warning("Account switched locally, but server sync failed. Please try again later.");
       // Proceed with local update for UI consistency
-      const updatedAccount = {
+      const updatedAccount: Account = {
         ...account,
         balance: Number(account.balance) || 0,
       };
@@ -196,9 +212,9 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
       localStorage.setItem("active_account_id", account.id.toString());
       localStorage.setItem("account_type", account.account_type);
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real");
-      const updatedUser = {
-        ...user,
-        accounts: user.accounts.map((acc: any) =>
+      const updatedUser: User = {
+        ...user!,
+        accounts: user!.accounts.map((acc: Account) =>
           acc.id === account.id ? updatedAccount : { ...acc, balance: Number(acc.balance) || 0 }
         ),
       };
@@ -209,9 +225,9 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
   };
 
   const accountBalance = activeAccount?.balance ? Number(activeAccount.balance) : 0;
-  const availableAccounts = loginType === "real"
-    ? (user?.accounts || []).filter((acc: any) => acc.account_type !== "demo")
-    : (user?.accounts || []).filter((acc: any) => acc.account_type === "demo");
+  const availableAccounts: Account[] = loginType === "real"
+    ? (user?.accounts || []).filter((acc: Account) => acc.account_type !== "demo")
+    : (user?.accounts || []).filter((acc: Account) => acc.account_type === "demo");
 
   useEffect(() => {
     console.log("Trading Layout - Active Account:", activeAccount);

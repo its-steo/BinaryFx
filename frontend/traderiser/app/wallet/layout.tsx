@@ -8,14 +8,46 @@ import { TopNavbar } from "@/components/top-navbar";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
+interface Account {
+  id: number;
+  account_type: string;
+  balance: number;
+  kyc_verified?: boolean;
+}
+
+interface User {
+  username: string;
+  email: string;
+  phone: string;
+  is_sashi: boolean;
+  is_email_verified: boolean;
+  accounts: Account[];
+}
+
+interface Wallet {
+  wallet_type: string;
+  account_type: string;
+  balance: string | number;
+}
+
+/**
+ * Simple ApiResponse type used by the local api wrapper.
+ * Adjust fields if your api wrapper returns a different shape.
+ */
+interface ApiResponse<T> {
+  data?: T;
+  error?: string | null;
+  status?: number;
+}
+
 interface WalletLayoutProps {
   children: React.ReactNode;
 }
 
 export default function WalletLayout({ children }: WalletLayoutProps) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
-  const [activeAccount, setActiveAccount] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
   const [loginType, setLoginType] = useState<string>("real");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,14 +89,14 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
       }
 
       try {
-        const data = JSON.parse(raw);
+        const data: User = JSON.parse(raw);
         if (!data || !data.accounts || !Array.isArray(data.accounts)) {
           throw new Error("Invalid session data: accounts missing or not an array");
         }
 
-        const normalizedUser = {
+        const normalizedUser: User = {
           ...data,
-          accounts: data.accounts.map((acc: any) => ({
+          accounts: data.accounts.map((acc: Account) => ({
             ...acc,
             balance: Number(acc.balance) || 0,
           })),
@@ -73,8 +105,8 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
         setIsLoggedIn(true);
         setUser(normalizedUser);
         const activeId = localStorage.getItem("active_account_id");
-        const account = normalizedUser.accounts.find((acc: any) => acc.id === Number(activeId)) ||
-                       normalizedUser.accounts.find((acc: any) => acc.account_type === "standard") ||
+        const account = normalizedUser.accounts.find((acc: Account) => acc.id === Number(activeId)) ||
+                       normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") ||
                        normalizedUser.accounts[0];
 
         if (!account) {
@@ -87,7 +119,7 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
         // Skip wallet fetch if modal is active to avoid premature errors
         if (!isModalActive) {
           console.log("Fetching wallets, account_type:", account.account_type); // Debug log
-          const walletRes = await api.getWallets();
+          const walletRes: ApiResponse<{ wallets: Wallet[] }> = await api.getWallets();
           if (walletRes.error) {
             console.error("Wallet fetch failed:", walletRes.error, "status:", walletRes.status); // Debug log
             if (walletRes.status === 401 && isModalActive) {
@@ -100,13 +132,13 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
           }
           if (walletRes.data?.wallets) {
             const mainWallet = walletRes.data.wallets.find(
-              (w: any) => w.wallet_type === "main" && w.account_type === account.account_type
+              (w: Wallet) => w.wallet_type === "main" && w.account_type === account.account_type
             );
             if (mainWallet) {
               console.log("Main wallet found:", mainWallet); // Debug log
-              const updatedUser = {
+              const updatedUser: User = {
                 ...normalizedUser,
-                accounts: normalizedUser.accounts.map((acc: any) =>
+                accounts: normalizedUser.accounts.map((acc: Account) =>
                   acc.id === account.id ? { ...acc, balance: Number(mainWallet.balance) || 0 } : acc
                 ),
               };
@@ -149,14 +181,14 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
     };
   }, [isModalActive]);
 
-  const handleSwitchAccount = async (account: any) => {
+  const handleSwitchAccount = async (account: Account) => {
     console.log("Switching account to:", account?.id); // Debug log
     if (!account) {
       toast.error("No account selected");
       return;
     }
     try {
-      const res = await api.switchAccount({ account_id: account.id });
+      const res: ApiResponse<unknown> = await api.switchAccount({ account_id: account.id });
       if (res.error) {
         console.error("Switch account failed:", res.error, "status:", res.status); // Debug log
         if (res.status === 401 && isModalActive) {
@@ -172,7 +204,7 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
         toast.warning("Account switched locally, but server sync failed. Balance may be outdated.");
       }
 
-      const updatedAccount = {
+      const updatedAccount: Account = {
         ...account,
         balance: Number(account.balance) || 0,
       };
@@ -180,9 +212,9 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
       localStorage.setItem("active_account_id", account.id.toString());
       localStorage.setItem("account_type", account.account_type);
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real");
-      const updatedUser = {
-        ...user,
-        accounts: user.accounts.map((acc: any) =>
+      const updatedUser: User = {
+        ...user!,
+        accounts: user!.accounts.map((acc: Account) =>
           acc.id === account.id ? updatedAccount : { ...acc, balance: Number(acc.balance) || 0 }
         ),
       };
@@ -192,7 +224,7 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
 
       // Skip wallet fetch if modal is active
       if (!isModalActive) {
-        const walletRes = await api.getWallets();
+        const walletRes: ApiResponse<{ wallets: Wallet[] }> = await api.getWallets();
         if (walletRes.error) {
           console.error("Wallet fetch after switch failed:", walletRes.error, "status:", walletRes.status); // Debug log
           if (walletRes.status === 401 && isModalActive) {
@@ -204,12 +236,12 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
         }
         if (walletRes.data?.wallets) {
           const mainWallet = walletRes.data.wallets.find(
-            (w: any) => w.wallet_type === "main" && w.account_type === account.account_type
+            (w: Wallet) => w.wallet_type === "main" && w.account_type === account.account_type
           );
           if (mainWallet) {
-            const syncedUser = {
+            const syncedUser: User = {
               ...updatedUser,
-              accounts: updatedUser.accounts.map((acc: any) =>
+              accounts: updatedUser.accounts.map((acc: Account) =>
                 acc.id === account.id ? { ...acc, balance: Number(mainWallet.balance) || 0 } : acc
               ),
             };
@@ -224,7 +256,7 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
     } catch (error) {
       console.warn("Switch failed, proceeding with local update:", error);
       toast.warning("Account switched locally, but server sync failed. Please try again later.");
-      const updatedAccount = {
+      const updatedAccount: Account = {
         ...account,
         balance: Number(account.balance) || 0,
       };
@@ -232,9 +264,9 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
       localStorage.setItem("active_account_id", account.id.toString());
       localStorage.setItem("account_type", account.account_type);
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real");
-      const updatedUser = {
-        ...user,
-        accounts: user.accounts.map((acc: any) =>
+      const updatedUser: User = {
+        ...user!,
+        accounts: user!.accounts.map((acc: Account) =>
           acc.id === account.id ? updatedAccount : { ...acc, balance: Number(acc.balance) || 0 }
         ),
       };
@@ -255,9 +287,9 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
     window.location.href = "/login";
   };
 
-  const availableAccounts = loginType === "real"
-    ? (user?.accounts || []).filter((acc: any) => acc.account_type !== "demo")
-    : (user?.accounts || []).filter((acc: any) => acc.account_type === "demo");
+  const availableAccounts: Account[] = loginType === "real"
+    ? (user?.accounts || []).filter((acc: Account) => acc.account_type !== "demo")
+    : (user?.accounts || []).filter((acc: Account) => acc.account_type === "demo");
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-black">Loading...</div>;

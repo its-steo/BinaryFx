@@ -1,4 +1,3 @@
-// components/wallet/transaction-list.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -6,6 +5,10 @@ import { formatCurrency } from "@/lib/format-currency"
 import { type WalletTransaction, api } from "@/lib/api"
 import { TransactionItem } from "./transaction-items"
 import { toast } from "sonner"
+
+interface TransactionsResponse {
+  transactions?: WalletTransaction[]
+}
 
 export function TransactionList() {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([])
@@ -16,12 +19,18 @@ export function TransactionList() {
       const res = await api.getWalletTransactions()
       if (res.error) throw new Error(res.error)
 
-      // Normalize response to an array of WalletTransaction
       const data: WalletTransaction[] = (() => {
         if (!res.data) return []
         if (Array.isArray(res.data)) return res.data as WalletTransaction[]
-        if (typeof res.data === "object" && "transactions" in res.data && Array.isArray((res.data as any).transactions)) {
-          return (res.data as any).transactions as WalletTransaction[]
+
+        // Type guard for TransactionsResponse structure
+        const responseData = res.data as TransactionsResponse
+        if (
+          typeof responseData === "object" &&
+          "transactions" in responseData &&
+          Array.isArray(responseData.transactions)
+        ) {
+          return responseData.transactions as WalletTransaction[]
         }
         return []
       })()
@@ -67,7 +76,9 @@ export function TransactionList() {
                 id: transaction.id,
                 type: transaction.transaction_type.charAt(0).toUpperCase() + transaction.transaction_type.slice(1),
                 amount: `${formatCurrency(transaction.amount)} ${transaction.currency.code}`,
-                convertedAmount: transaction.converted_amount ? `${formatCurrency(transaction.converted_amount)} ${transaction.target_currency?.code || 'USD'}` : undefined,
+                convertedAmount: transaction.converted_amount
+                  ? `${formatCurrency(transaction.converted_amount)} ${transaction.target_currency?.code || "USD"}`
+                  : undefined,
                 date: new Date(transaction.created_at).toLocaleDateString("en-US", {
                   year: "numeric",
                   month: "short",
@@ -79,7 +90,7 @@ export function TransactionList() {
                 exchangeRateUsed: transaction.exchange_rate_used,
                 status: transaction.status,
                 currency: transaction.currency,
-                target_currency: transaction.target_currency
+                target_currency: transaction.target_currency,
               }}
             />
           ))

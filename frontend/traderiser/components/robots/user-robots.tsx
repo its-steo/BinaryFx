@@ -47,7 +47,7 @@ export function UserRobots() {
   if (userRobots.length === 0) {
     return (
       <div className="rounded-2xl p-12 bg-white/10 backdrop-blur-md border border-white/20 text-center">
-        <p className="text-white/60 mb-4">You haven't purchased any robots yet</p>
+        <p className="text-white/60 mb-4">You have not purchased any robots yet</p>
         <p className="text-sm text-white/60">Visit the marketplace to purchase your first robot</p>
       </div>
     )

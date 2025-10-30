@@ -37,6 +37,12 @@ interface DashboardData {
   }>;
 }
 
+interface Api {
+  getDashboard: () => Promise<{ data?: DashboardData; error?: string }>;
+  resetDemoBalance: () => Promise<{ error?: string }>;
+  createAdditionalAccount: (params: { account_type: string }) => Promise<{ error?: string }>;
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,13 +62,12 @@ export default function DashboardPage() {
           setError(res.error);
           return;
         }
-        // Cast res.data to DashboardData to satisfy the state setter's expected type
         setData(res.data as DashboardData);
         const activeType = localStorage.getItem("account_type") || "standard";
         setSelectedAccount(activeType);
         setLoginType(activeType === "demo" ? "demo" : "real");
       })
-      .catch((err) => setError(err.message))
+      .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   };
 
@@ -85,24 +90,24 @@ export default function DashboardPage() {
       if (res.error) throw new Error(res.error);
       showSuccess("Demo balance reset to $10,000");
       window.dispatchEvent(new Event("session-updated"));
-    } catch (err: any) {
-      showError(err.message || "Failed to reset demo balance");
+    } catch (err: unknown) {
+      showError((err as Error).message || "Failed to reset demo balance");
     }
   };
 
   const handleCreateProFx = async () => {
     try {
-      const apiCreateAdditionalAccount = (api as any).createAdditionalAccount;
+      const apiCreateAdditionalAccount = (api as unknown as Api).createAdditionalAccount;
       if (typeof apiCreateAdditionalAccount !== "function") {
         throw new Error("API method createAdditionalAccount is not available");
       }
       const res = await apiCreateAdditionalAccount({ account_type: "pro-fx" });
       if (res.error) throw new Error(res.error);
       showSuccess("Pro-FX account created successfully");
-      fetchData(); // Refresh dashboard data
+      fetchData();
       window.dispatchEvent(new Event("session-updated"));
-    } catch (err: any) {
-      showError(err.message || "Failed to create Pro-FX account");
+    } catch (err: unknown) {
+      showError((err as Error).message || "Failed to create Pro-FX account");
     }
   };
 

@@ -12,6 +12,21 @@ import { api } from "@/lib/api";
 import { mutate } from "swr";
 import { toast } from "sonner";
 
+interface Position {
+  id: number;
+  pair: {
+    id: number;
+    name: string;
+    contract_size: number;
+    spread: number;
+  };
+  direction: "buy" | "sell";
+  volume_lots: number;
+  entry_price: number;
+  time_frame: string;
+  account: number | { balance: number }; // Can be number or object
+}
+
 export default function TradesPage() {
   const { positions, isLoading, error, mutate: mutatePositions } = usePositions();
   const { prices, isSashi } = usePriceUpdates();
@@ -19,7 +34,7 @@ export default function TradesPage() {
   const [closingAll, setClosingAll] = useState(false);
   const [animatedPL, setAnimatedPL] = useState<{ [key: number]: number }>({});
 
-  const calculateFloatingPL = (position: any, currentPrice: number) => {
+  const calculateFloatingPL = (position: Position, currentPrice: number) => {
     const pipValue = 0.0001; // Standard pip value for forex
     const pipDelta = position.direction === 'buy'
       ? (currentPrice - position.entry_price) / pipValue
@@ -36,9 +51,10 @@ export default function TradesPage() {
     return sum + (isNaN(pl) ? 0 : pl);
   }, 0);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const animationFrames: NodeJS.Timeout[] = [];
-    positions.forEach((position) => {
+    positions.forEach((position: Position) => {
       const currentPrice = prices[position.pair.id] || position.entry_price;
       const newPL = calculateFloatingPL(position, currentPrice);
       const startPL = animatedPL[position.id] ?? newPL;
@@ -57,14 +73,14 @@ export default function TradesPage() {
 
       const accountBalance = typeof position.account === 'number'
         ? position.account
-        : ((position.account as any)?.balance ?? 0);
+        : (position.account as { balance: number }).balance ?? 0;
 
       if (!isSashi && newPL <= 0 && Math.abs(newPL) >= accountBalance) {
         toast.warning(`Margin Call: ${position.pair.name}`);
       }
     });
     return () => animationFrames.forEach(clearTimeout);
-  }, [positions, prices, isSashi]);
+  }, [positions, prices, isSashi, animatedPL]);
 
   const handleClosePosition = async (positionId: number) => {
     try {
@@ -80,8 +96,12 @@ export default function TradesPage() {
       mutatePositions();
       mutate("/wallet/wallets/");
       toast.success(`Position closed with P&L $${realizedPL.toFixed(2)}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to close");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        toast.error(err.message || "Failed to close");
+      } else {
+        toast.error("Failed to close");
+      }
     } finally {
       setClosingId(null);
     }
@@ -94,8 +114,12 @@ export default function TradesPage() {
       mutatePositions();
       mutate("/wallet/wallets/");
       toast.success("All positions closed!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to close all");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        toast.error(err.message || "Failed to close all");
+      } else {
+        toast.error("Failed to close all");
+      }
     } finally {
       setClosingAll(false);
     }
@@ -141,7 +165,7 @@ export default function TradesPage() {
               {closingAll ? "Closing All..." : "Close All Positions"}
             </Button>
 
-            {positions.map((position) => {
+            {positions.map((position: Position) => {
               const currentPrice = prices[position.pair.id] || position.entry_price;
               const pl = animatedPL[position.id] ?? calculateFloatingPL(position, currentPrice);
               const color = pl >= 0 ? "text-green-500" : "text-red-500";

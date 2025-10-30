@@ -6,15 +6,18 @@ import Link from "next/link";
 import { TrendingUp, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+interface Account {
+  id: number;
+  account_type: string;
+  balance: number;
+  kyc_verified?: boolean;
+}
+
 interface User {
   username: string;
   email: string;
   image?: string;
-  accounts: Array<{
-    id: number;
-    account_type: string;
-    balance: number;
-  }>;
+  accounts: Account[];
 }
 
 interface TopNavbarProps {
@@ -22,9 +25,9 @@ interface TopNavbarProps {
   user?: User | null;
   accountBalance: number;
   showBalance?: boolean;
-  activeAccount: any;
-  accounts: any[];
-  onSwitchAccount: (account: any) => void;
+  activeAccount: Account | null;
+  accounts: Account[];
+  onSwitchAccount: (account: Account) => void;
   onLogout?: () => void;
 }
 

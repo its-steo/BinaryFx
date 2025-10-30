@@ -5,30 +5,49 @@ import { useToast } from "@/hooks/use-toast"
 import { api } from "@/lib/api"
 import { motion, AnimatePresence } from "framer-motion"
 import { CheckCircle, XCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/format-currency"
 
 interface Trade {
-  id: number
-  market: { name: string }
+  id: string | number
+  market: string | { name: string }
   direction: string
-  amount: string
+  amount: number
+  status?: "pending" | "executing" | "completed"
   is_win: boolean
-  profit: string
-  created_at: string
-  entrySpot?: number | string
-  exitSpot?: number | string
-  buyPrice?: number
+  profit: number
+  timeLeft?: number
+  entrySpot?: number
+  exitSpot?: number
+  market_id?: number
   trade_type_id?: number
+  robot_id?: number
+  use_martingale?: boolean
+  martingale_level?: number
+  targetProfit?: number
+  stopLoss?: number
+  profit_multiplier?: string
+  created_at: string
+  buyPrice?: number
 }
 
-export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) {
+interface TradeHistoryProps {
+  sessionTrades?: Trade[]
+}
+
+export function TradeHistory({ sessionTrades }: TradeHistoryProps) {
   const { toast } = useToast()
-  const [trades, setTrades] = useState<Trade[]>([])
+  const [trades, setTrades] = useState<Trade[]>(sessionTrades || [])
   const [tradeTypes, setTradeTypes] = useState<{ id: number; name: string }[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!sessionTrades)
   const [currentPage, setCurrentPage] = useState(1)
   const tradesPerPage = 10
+
+  useEffect(() => {
+    if (sessionTrades) {
+      const recentTrades = sessionTrades.slice(-10)
+      setTrades(recentTrades)
+    }
+  }, [sessionTrades])
 
   useEffect(() => {
     const fetchTradeTypes = async () => {
@@ -42,14 +61,15 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
   }, [])
 
   useEffect(() => {
-    fetchTrades()
-  }, [])
+    if (!sessionTrades) {
+      fetchTrades()
+    }
+  }, [sessionTrades])
 
   const fetchTrades = async () => {
     setIsLoading(true)
     try {
-      // Narrow the response type so `data` is not treated as `unknown`
-      const response = await api.getTradeHistory() as { data?: any; error?: unknown }
+      const response = (await api.getTradeHistory()) as { data?: { trades: Trade[] }; error?: unknown }
       const { data, error } = response
       if (error) {
         toast({ title: "Error", description: "Failed to load trade history: " + error, variant: "destructive" })
@@ -58,20 +78,21 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
       }
 
       const tradeData = Array.isArray(data?.trades) ? data.trades : []
-      const enhancedData = tradeData.map((t: any) => ({
+      const enhancedData = tradeData.map((t: Trade) => ({
         id: t.id,
         market: t.market,
         direction: t.direction,
         amount: t.amount,
         is_win: t.is_win,
         profit: t.profit,
-        created_at: t.timestamp,
-        entrySpot: t.entry_spot ? parseFloat(t.entry_spot) : Math.random() * 100,
-        exitSpot: t.exit_spot ? parseFloat(t.exit_spot) : Math.random() * 100,
-        buyPrice: Number.parseFloat(t.amount),
+        created_at: t.created_at,
+        entrySpot: t.entrySpot ? Number.parseFloat(t.entrySpot as unknown as string) : Math.random() * 100,
+        exitSpot: t.exitSpot ? Number.parseFloat(t.exitSpot as unknown as string) : Math.random() * 100,
+        buyPrice: Number.parseFloat(t.amount as unknown as string),
         trade_type_id: t.trade_type_id,
       }))
-      setTrades(enhancedData.reverse())
+      const recentTrades = enhancedData.reverse().slice(0, 10)
+      setTrades(recentTrades)
     } catch (err) {
       toast({ title: "Error", description: "Failed to fetch trade history", variant: "destructive" })
     } finally {
@@ -80,7 +101,7 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
   }
 
   const getDirectionLabel = (direction: string, tradeTypeId?: number) => {
-    const tradeType = tradeTypes.find(t => t.id === tradeTypeId)
+    const tradeType = tradeTypes.find((t) => t.id === tradeTypeId)
     const tradeTypeName = tradeType?.name.toLowerCase()
     switch (tradeTypeName) {
       case "rise/fall":
@@ -91,8 +112,8 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
     }
   }
 
-  const paginatedTrades = trades.slice((currentPage - 1) * tradesPerPage, currentPage * tradesPerPage)
-  const totalPages = Math.ceil(trades.length / tradesPerPage)
+  const displayTrades = trades
+  const totalPages = 1
 
   return (
     <div className="w-full">
@@ -106,7 +127,7 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
           {/* Mobile: Card Layout */}
           <div className="lg:hidden space-y-3">
             <AnimatePresence>
-              {paginatedTrades.map(trade => (
+              {displayTrades.map((trade) => (
                 <motion.div
                   key={trade.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -116,26 +137,35 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
                 >
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-sm font-semibold text-white truncate flex-1 mr-2">
-                      {trade.market.name}
+                      {typeof trade.market === "string" ? trade.market : trade.market.name}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      trade.direction === "buy" || trade.direction === "rise"
-                        ? "bg-green-500/20 text-green-400"
-                        : "bg-red-500/20 text-red-400"
-                    }`}>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        trade.direction === "buy" || trade.direction === "rise"
+                          ? "bg-green-500/20 text-green-400"
+                          : "bg-red-500/20 text-red-400"
+                      }`}
+                    >
                       {getDirectionLabel(trade.direction, trade.trade_type_id)}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-xs sm:text-sm text-white/60">
                     <div>
                       <span className="block">Amount</span>
-                      <span className="font-semibold text-white">${trade.buyPrice?.toFixed(2)}</span>
+                      <span className="font-semibold text-white">${(trade.buyPrice || trade.amount).toFixed(2)}</span>
                     </div>
                     <div>
                       <span className="block">Spots</span>
                       <span className="font-semibold text-white/80">
-                        {(typeof trade.entrySpot === 'number' ? trade.entrySpot : parseFloat(trade.entrySpot || '0')).toFixed(2)} / 
-                        {(typeof trade.exitSpot === 'number' ? trade.exitSpot : parseFloat(trade.exitSpot || '0')).toFixed(2)}
+                        {(typeof trade.entrySpot === "number"
+                          ? trade.entrySpot
+                          : Number.parseFloat(trade.entrySpot || "0")
+                        ).toFixed(2)}{" "}
+                        /
+                        {(typeof trade.exitSpot === "number"
+                          ? trade.exitSpot
+                          : Number.parseFloat(trade.exitSpot || "0")
+                        ).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -152,12 +182,12 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
                     </div>
                     <motion.span
                       className={`font-bold text-sm sm:text-base ${
-                        Number.parseFloat(trade.profit) >= 0 ? "text-green-400" : "text-red-400"
+                        Number(trade.profit) >= 0 ? "text-green-400" : "text-red-400"
                       }`}
                       animate={{ scale: [1, 1.1, 1] }}
                       transition={{ duration: 0.3, delay: 0.2 }}
                     >
-                      ${Number.parseFloat(trade.profit).toFixed(2)}
+                      ${Number(trade.profit).toFixed(2)}
                     </motion.span>
                   </div>
                 </motion.div>
@@ -181,7 +211,7 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
                 </thead>
                 <tbody>
                   <AnimatePresence>
-                    {paginatedTrades.map(trade => (
+                    {displayTrades.map((trade) => (
                       <motion.tr
                         key={trade.id}
                         initial={{ opacity: 0, y: 10 }}
@@ -189,23 +219,32 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
                         exit={{ opacity: 0, y: -10 }}
                         className="border-b border-white/5 hover:bg-white/5"
                       >
-                        <td className="py-3 px-4 text-white truncate">{trade.market.name}</td>
+                        <td className="py-3 px-4 text-white truncate">
+                          {typeof trade.market === "string" ? trade.market : trade.market.name}
+                        </td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full font-bold ${
-                            trade.direction === "buy" || trade.direction === "rise"
-                              ? "bg-green-500/20 text-green-400"
-                              : "bg-red-500/20 text-red-400"
-                          }`}>
+                          <span
+                            className={`px-2 py-1 rounded-full font-bold ${
+                              trade.direction === "buy" || trade.direction === "rise"
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-red-500/20 text-red-400"
+                            }`}
+                          >
                             {getDirectionLabel(trade.direction, trade.trade_type_id)}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-white/60">
-                          {(typeof trade.entrySpot === 'number' ? trade.entrySpot : parseFloat(trade.entrySpot || '0')).toFixed(2)} / 
-                          {(typeof trade.exitSpot === 'number' ? trade.exitSpot : parseFloat(trade.exitSpot || '0')).toFixed(2)}
+                          {(typeof trade.entrySpot === "number"
+                            ? trade.entrySpot
+                            : Number.parseFloat(trade.entrySpot || "0")
+                          ).toFixed(2)}{" "}
+                          /
+                          {(typeof trade.exitSpot === "number"
+                            ? trade.exitSpot
+                            : Number.parseFloat(trade.exitSpot || "0")
+                          ).toFixed(2)}
                         </td>
-                        <td className="py-3 px-4 text-white">
-                          ${formatCurrency(trade.buyPrice || 0)}  
-                        </td>
+                        <td className="py-3 px-4 text-white">${formatCurrency(trade.buyPrice || trade.amount)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             {trade.is_win ? (
@@ -220,13 +259,11 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
                         </td>
                         <td className="py-3 px-4">
                           <motion.span
-                            className={`font-bold ${
-                              Number.parseFloat(trade.profit) >= 0 ? "text-green-400" : "text-red-400"
-                            }`}
+                            className={`font-bold ${Number(trade.profit) >= 0 ? "text-green-400" : "text-red-400"}`}
                             animate={{ scale: [1, 1.1, 1] }}
                             transition={{ duration: 0.3, delay: 0.2 }}
                           >
-                            ${Number.parseFloat(trade.profit).toFixed(2)}
+                            ${Number(trade.profit).toFixed(2)}
                           </motion.span>
                         </td>
                       </motion.tr>
@@ -236,33 +273,6 @@ export function TradeHistory({ sessionTrades = [] }: { sessionTrades?: any[] }) 
               </table>
             </div>
           </div>
-
-          {/* Pagination - Responsive */}
-          {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4">
-              <Button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                variant="outline"
-                className="border-white/20 bg-white/5 text-white hover:bg-white/10 flex-1 sm:flex-none px-4 py-2 text-sm"
-                size="sm"
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-white/60 font-medium">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                variant="outline"
-                className="border-white/20 bg-white/5 text-white hover:bg-white/10 flex-1 sm:flex-none px-4 py-2 text-sm"
-                size="sm"
-              >
-                Next
-              </Button>
-            </div>
-          )}
         </>
       )}
     </div>

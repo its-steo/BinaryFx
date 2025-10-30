@@ -37,8 +37,8 @@ export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame,
       onPlaceOrder()
       mutate("/forex/positions/")
       mutate("/wallet/wallets/")
-    } catch (err: any) {
-      setError(err.message || "Failed to place order. Insufficient balance or invalid parameters.")
+    } catch (err: unknown) {
+      setError((err as { message: string }).message || "Failed to place order. Insufficient balance or invalid parameters.")
     } finally {
       setLoading(false)
     }

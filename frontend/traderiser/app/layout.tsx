@@ -1,3 +1,4 @@
+// app/layout.tsx
 import type React from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
@@ -16,6 +17,18 @@ export const metadata: Metadata = {
   title: "Traderiser - Professional Trading Platform",
   description: "Trade binary options, forex, crypto, and synthetic indices with advanced automation",
   generator: "v0.app",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/images/traderiser-logo-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/images/traderiser-logo-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/images/traderiser-logo-maskable-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/images/traderiser-logo-maskable-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/images/traderiser-logo-192.png", sizes: "192x192", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -25,8 +38,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1f2937" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <Suspense fallback={null}>
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-800 to-gray-900">
+              <img
+                src="/images/traderiser-logo-192.png"
+                alt="Traderiser Logo"
+                className="w-48 h-auto"
+              />
+            </div>
+          }
+        >
           <ClientWrapper>
             {children}
           </ClientWrapper>

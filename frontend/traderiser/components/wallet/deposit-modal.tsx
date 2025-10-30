@@ -104,10 +104,10 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
       onSetMessage({ type: "success", text: "STK has been sent to your phone" });
       // Delay session-updated to avoid immediate redirect
       setTimeout(() => window.dispatchEvent(new Event("session-updated")), 100);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Deposit failed:", err);
-      setError(err.message || "Deposit failed");
-      onSetMessage({ type: "error", text: err.message || "Deposit failed" });
+      setError((err as Error).message || "Deposit failed");
+      onSetMessage({ type: "error", text: (err as Error).message || "Deposit failed" });
     } finally {
       setIsSubmitting(false);
     }

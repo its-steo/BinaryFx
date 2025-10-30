@@ -167,8 +167,8 @@ export const signup = async (data: {
   const response = await apiRequest<{
     access: string
     refresh: string
-    user: any
-    active_account: any
+    user: Record<string, unknown>
+    active_account: Record<string, unknown>
   }>("/accounts/signup/", {
     method: "POST",
     body: JSON.stringify(data),
@@ -181,15 +181,20 @@ export const signup = async (data: {
     localStorage.setItem("login_type", data.account_type === "demo" ? "demo" : "real")
     const normalizedUser = {
       ...response.data.user,
-      accounts: response.data.user.accounts.map((acc: any) => ({
-        ...acc,
-        balance: Number(acc.balance) || 0,
-      })),
+      accounts: (response.data.user as Record<string, unknown>).accounts
+        ? ((response.data.user as Record<string, unknown>).accounts as Array<Record<string, unknown>>).map((acc) => ({
+            ...acc,
+            balance: Number(acc.balance) || 0,
+          }))
+        : [],
     }
     localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-    const defaultAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === data.account_type) || normalizedUser.accounts[0]
+    const defaultAccount =
+      (normalizedUser.accounts as Array<Record<string, unknown>>).find(
+        (acc) => acc.account_type === data.account_type,
+      ) || (normalizedUser.accounts as Array<Record<string, unknown>>)[0]
     if (defaultAccount) {
-      localStorage.setItem("active_account_id", defaultAccount.id.toString())
+      localStorage.setItem("active_account_id", (defaultAccount.id as number).toString())
     }
   }
 
@@ -200,8 +205,8 @@ export const login = async (data: { email: string; password: string; account_typ
   const response = await apiRequest<{
     access: string
     refresh: string
-    user: any
-    active_account: any
+    user: Record<string, unknown>
+    active_account: Record<string, unknown>
   }>("/accounts/login/", {
     method: "POST",
     body: JSON.stringify(data),
@@ -214,15 +219,20 @@ export const login = async (data: { email: string; password: string; account_typ
     localStorage.setItem("login_type", data.account_type === "demo" ? "demo" : "real")
     const normalizedUser = {
       ...response.data.user,
-      accounts: response.data.user.accounts.map((acc: any) => ({
-        ...acc,
-        balance: Number(acc.balance) || 0,
-      })),
+      accounts: (response.data.user as Record<string, unknown>).accounts
+        ? ((response.data.user as Record<string, unknown>).accounts as Array<Record<string, unknown>>).map((acc) => ({
+            ...acc,
+            balance: Number(acc.balance) || 0,
+          }))
+        : [],
     }
     localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-    const defaultAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === data.account_type) || normalizedUser.accounts[0]
+    const defaultAccount =
+      (normalizedUser.accounts as Array<Record<string, unknown>>).find(
+        (acc) => acc.account_type === data.account_type,
+      ) || (normalizedUser.accounts as Array<Record<string, unknown>>)[0]
     if (defaultAccount) {
-      localStorage.setItem("active_account_id", defaultAccount.id.toString())
+      localStorage.setItem("active_account_id", (defaultAccount.id as number).toString())
     }
   }
 
@@ -230,25 +240,28 @@ export const login = async (data: { email: string; password: string; account_typ
 }
 
 export const createAdditionalAccount = async (data: { account_type: string }) => {
-  const response = await apiRequest<{ user: any; active_account: any }>("/accounts/account/create/", {
-    method: "POST",
-    body: JSON.stringify(data),
-  })
+  const response = await apiRequest<{ user: Record<string, unknown>; active_account: Record<string, unknown> }>(
+    "/accounts/account/create/",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  )
 
   if (response.data) {
     const { user, active_account } = response.data
     if (user && active_account) {
       const normalizedUser = {
         ...user,
-        accounts: user.accounts.map((acc: any) => ({
+        accounts: (user.accounts as Array<Record<string, unknown>>).map((acc) => ({
           ...acc,
           balance: Number(acc.balance) || 0,
         })),
       }
       localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-      localStorage.setItem("account_type", active_account.account_type)
-      localStorage.setItem("login_type", active_account.account_type === "demo" ? "demo" : "real")
-      localStorage.setItem("active_account_id", active_account.id.toString())
+      localStorage.setItem("account_type", (active_account.account_type as string) || "")
+      localStorage.setItem("login_type", (active_account.account_type as string) === "demo" ? "demo" : "real")
+      localStorage.setItem("active_account_id", (active_account.id as number).toString())
       return { data: { user: normalizedUser, active_account }, status: response.status }
     }
   }
@@ -259,24 +272,27 @@ export const createAdditionalAccount = async (data: { account_type: string }) =>
 export const getAccount = () => apiRequest("/accounts/account/")
 
 export const switchAccount = async (data: { account_id: number }) => {
-  const response = await apiRequest<{ user: any; account: any }>("/accounts/wallet/switch/", {
-    method: "POST",
-    body: JSON.stringify(data),
-  })
+  const response = await apiRequest<{ user: Record<string, unknown>; account: Record<string, unknown> }>(
+    "/accounts/wallet/switch/",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  )
 
   if (response.data) {
     const { user, account } = response.data
     if (user && account) {
       const normalizedUser = {
         ...user,
-        accounts: user.accounts.map((acc: any) => ({
+        accounts: (user.accounts as Array<Record<string, unknown>>).map((acc) => ({
           ...acc,
           balance: Number(acc.balance) || 0,
         })),
       }
       localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-      localStorage.setItem("account_type", account.account_type)
-      localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real")
+      localStorage.setItem("account_type", (account.account_type as string) || "")
+      localStorage.setItem("login_type", (account.account_type as string) === "demo" ? "demo" : "real")
       localStorage.setItem("active_account_id", data.account_id.toString())
       return { data: { user, account }, status: 200 }
     }
@@ -291,13 +307,12 @@ export const getTradeTypes = () => apiRequest("/trading/trade-types/")
 
 export const getAssets = () => apiRequest("/trading/assets/")
 
-export const placeTrade = (data: any) =>
+export const placeTrade = (data: Record<string, unknown>) =>
   apiRequest("/trading/trades/place/", { method: "POST", body: JSON.stringify(data) })
 
 export const getTradeHistory = () => apiRequest("/trading/trades/history/")
 
-export const cancelTrade = (tradeId: number) =>
-  apiRequest(`/trading/trades/${tradeId}/cancel/`, { method: "POST" })
+export const cancelTrade = (tradeId: number) => apiRequest(`/trading/trades/${tradeId}/cancel/`, { method: "POST" })
 
 export const getPriceHistory = (data: { symbol: string; timeframe: string }) =>
   apiRequest("/trading/price-history/", { method: "POST", body: JSON.stringify(data) })
@@ -306,39 +321,40 @@ export const getRobots = () => apiRequest("/trading/robots/")
 
 export const getUserRobots = () => apiRequest("/trading/user-robots/")
 
-export const purchaseRobot = (robotId: number) =>
-  apiRequest(`/trading/purchase/${robotId}/`, { method: "POST" })
+export const purchaseRobot = (robotId: number) => apiRequest(`/trading/purchase/${robotId}/`, { method: "POST" })
 
 export const resetDemoBalance = () => apiRequest("/accounts/demo/reset/", { method: "POST" })
 
 export const getBots = () => apiRequest("/bots/")
 
-export const createBot = (data: any) =>
+export const createBot = (data: Record<string, unknown>) =>
   apiRequest("/bots/", { method: "POST", body: JSON.stringify(data) })
 
-export const toggleBot = (botId: number) =>
-  apiRequest(`/bots/${botId}/toggle/`, { method: "POST" })
+export const toggleBot = (botId: number) => apiRequest(`/bots/${botId}/toggle/`, { method: "POST" })
 
 export const getSubscription = () => apiRequest("/bots/subscription/")
 
 export const subscribe = () => apiRequest("/bots/subscription/", { method: "POST" })
 
 export const getDashboard = async () => {
-  const response = await apiRequest<{ user?: any }>("/dashboard/")
+  const response = await apiRequest<{ user?: Record<string, unknown> }>("/dashboard/")
   if (response.data) {
     const { user } = response.data
-    if (user && user.accounts && Array.isArray(user.accounts)) {
+    if (user && (user.accounts as Array<Record<string, unknown>>) && Array.isArray(user.accounts)) {
       const normalizedUser = {
         ...user,
-        accounts: user.accounts.map((acc: any) => ({
+        accounts: ((user.accounts as Array<Record<string, unknown>>) || []).map((acc) => ({
           ...acc,
           balance: Number(acc.balance) || 0,
         })),
       }
       localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-      const defaultAccount = normalizedUser.accounts.find((acc: any) => acc.account_type === localStorage.getItem("account_type")) || normalizedUser.accounts[0]
+      const defaultAccount =
+        (normalizedUser.accounts as Array<Record<string, unknown>>).find(
+          (acc) => acc.account_type === localStorage.getItem("account_type"),
+        ) || (normalizedUser.accounts as Array<Record<string, unknown>>)[0]
       if (defaultAccount) {
-        localStorage.setItem("active_account_id", defaultAccount.id.toString())
+        localStorage.setItem("active_account_id", (defaultAccount.id as number).toString())
       }
     }
   }
@@ -361,8 +377,13 @@ export const getForexCurrentPrices = (pairIds: number[]) =>
 
 export const getWalletTransactions = () => apiRequest<{ transactions: WalletTransaction[] }>("/wallet/transactions/")
 
-export const deposit = (data: { amount: number; currency: string; wallet_type: string; mpesa_phone: string; account_type: string }) =>
-  apiRequest("/wallet/deposit/", { method: "POST", body: JSON.stringify(data) })
+export const deposit = (data: {
+  amount: number
+  currency: string
+  wallet_type: string
+  mpesa_phone: string
+  account_type: string
+}) => apiRequest("/wallet/deposit/", { method: "POST", body: JSON.stringify(data) })
 
 export const withdrawOTP = (data: { amount: number; wallet_type: string; account_type: string }) =>
   apiRequest("/wallet/withdraw/otp/", { method: "POST", body: JSON.stringify(data) })
@@ -381,7 +402,8 @@ export const resendOTP = (transactionId: string) =>
 // Forex Trading API
 export const getForexPairs = () => apiRequest<{ pairs: ForexPair[] }>("/forex/pairs/")
 
-export const getForexCurrentPrice = (pairId: number) => apiRequest<{ current_price: number }>(`/forex/current-price/${pairId}/`)
+export const getForexCurrentPrice = (pairId: number) =>
+  apiRequest<{ current_price: number }>(`/forex/current-price/${pairId}/`)
 
 export const placeForexOrder = (data: {
   pair_id: number
