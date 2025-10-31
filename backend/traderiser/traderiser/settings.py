@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = 'django-insecure-u#@omyh#sp*#u=^4lbv+vt*yn=&ykf*lm(sg^#9kv4ln$-=gdo'
 DEBUG = True
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'binaryfx-delta.vercel.app']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'binaryfx-delta.vercel.app', 'binaryfx.onrender.com']
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = False
@@ -19,6 +19,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://binaryfx-delta.vercel.app",
+    "https://binaryfx.onrender.com",
 ]
 
 INSTALLED_APPS = [
@@ -75,10 +76,21 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
+#    }
+#}
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'binaryfx'),
+        'USER': os.getenv('DB_USER', 'binaryfx_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk'),
+        'HOST': os.getenv('DB_HOST', 'dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
