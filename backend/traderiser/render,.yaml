@@ -1,0 +1,64 @@
+# render.yaml for Django application
+
+# Define the services (web, database, and Redis)
+services:
+  - type: web
+    name: traderiser-web
+    env: python
+    plan: starter # Adjust based on your needs (free, starter, standard, etc.)
+    region: oregon # Adjust to your preferred region (e.g., oregon, frankfurt)
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
+    startCommand: gunicorn traderiser.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11 # Adjust to match your Python version
+      - key: SECRET_KEY
+        sync: false # Set in Render dashboard for security
+      - key: DEBUG
+        value: false # Disable debug in production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: traderiser-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: traderiser-redis
+          type: redis
+          property: connectionString
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_HOST_USER
+        value: grandviewshopafrica@gmail.com
+      - key: EMAIL_HOST_PASSWORD
+        sync: false # Set in Render dashboard for security
+      - key: DEFAULT_FROM_EMAIL
+        value: Grandview <grandviewshopafrica@gmail.com>
+      - key: ADMIN_EMAIL
+        value: grandviewshopafrica@gmail.com
+      - key: ALLOWED_HOSTS
+        value: .onrender.com # Automatically includes Render's domain
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://binaryfx-delta.vercel.app,http://localhost:3000
+      - key: SESSION_COOKIE_SECURE
+        value: true # Enable for HTTPS in production
+      - key: SESSION_COOKIE_SAMESITE
+        value: None # Required for cross-origin requests
+      - key: CSRF_COOKIE_SECURE
+        value: true # Enable for HTTPS in production
+
+  - type: redis
+    name: traderiser-redis
+    plan: free # Adjust based on your needs
+    region: oregon # Match the web service region
+    ipAllowList: [] # Allow all IPs (or restrict to your web service)
+
+databases:
+  - name: traderiser-db
+    databaseName: traderiser
+    plan: starter # Adjust based on your needs
+    region: oregon # Match the web service region
