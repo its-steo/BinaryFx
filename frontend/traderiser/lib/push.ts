@@ -9,7 +9,7 @@ export async function subscribeToPush() {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: 'YOUR_VAPID_PUBLIC_KEY', // Replace with your VAPID public key
+      applicationServerKey: 'BBRbE_o7fqhjeE4vMrwvmOECZNgy2N7QbXvuDWnnBBkskv3dBgOImPsx_ibYalb-zONJjDvNjpvXrDAsgNsE6w0', // Replace with your VAPID public key
     });
 
     // Send subscription to your backend
