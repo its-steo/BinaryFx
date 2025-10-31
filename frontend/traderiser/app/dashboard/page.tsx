@@ -97,11 +97,7 @@ export default function DashboardPage() {
 
   const handleCreateProFx = async () => {
     try {
-      const apiCreateAdditionalAccount = (api as unknown as Api).createAdditionalAccount;
-      if (typeof apiCreateAdditionalAccount !== "function") {
-        throw new Error("API method createAdditionalAccount is not available");
-      }
-      const res = await apiCreateAdditionalAccount({ account_type: "pro-fx" });
+      const res = await api.createAccount({ account_type: "pro-fx" });
       if (res.error) throw new Error(res.error);
       showSuccess("Pro-FX account created successfully");
       fetchData();

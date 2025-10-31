@@ -146,6 +146,22 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
             })}
           </nav>
         </div>
+        
+        <div className="absolute bottom-4 left-4 right-4 flex flex-col gap-3">
+          <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2">
+            <p className="text-xs font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-pink-500">
+              Trade Riser v1.0
+            </p>
+            <p className="text-xs text-white/70">Binary FX</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-white/70 hover:text-red-400 hover:bg-red-500/10 transition-all w-full group"
+          >
+            <LogOut size={20} className="text-white/70 group-hover:text-red-400" />
+            <span className="font-medium">Logout</span>
+          </button>
+        </div>
 
         {/* Logout button below the sidebar content */}
         <div className="absolute bottom-4 left-4 right-4">

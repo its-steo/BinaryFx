@@ -75,7 +75,6 @@ export function TradingInterface({
     fetchTradeTypes()
   }, [toast])
 
-  // Determine button labels based on trade type
   const getDirectionLabels = (tradeTypeName: string | undefined) => {
     switch (tradeTypeName?.toLowerCase()) {
       case "rise/fall":
@@ -89,7 +88,6 @@ export function TradingInterface({
   const selectedTradeTypeName = tradeTypes.find((t) => t.id === selectedTradeType)?.name
   const { primary: primaryLabel, secondary: secondaryLabel } = getDirectionLabels(selectedTradeTypeName)
 
-  // Reset direction when trade type changes
   useEffect(() => {
     setDirection(primaryLabel.toLowerCase())
   }, [selectedTradeType, primaryLabel])
@@ -124,27 +122,13 @@ export function TradingInterface({
         stopLoss: Number.parseFloat(stopLoss) || 0,
       }
 
-      const response = await api.placeTrade(params)
-      if (response.error) {
-        throw new Error(response.error)
-      }
-
-      let profit = 0
-      const data = response.data
-      if (typeof data === "object" && data !== null && "profit" in data) {
-        profit = Number.parseFloat(String((data as Record<string, unknown>).profit)) || 0
-      } else if (typeof data === "string" || typeof data === "number") {
-        profit = Number.parseFloat(String(data)) || 0
-      }
-
-      onBalanceChange(balance - amountNum + profit)
-      onSessionProfitChange(profit)
-      onStartTrading?.({ ...params, profit })
+      // The queue will handle the actual API call to prevent duplicate deductions
+      onStartTrading?.({ ...params, profit: 0 })
 
       toast({
-        title: "Trade placed",
-        description: `Profit: $${formatCurrency(profit)}`,
-        variant: profit >= 0 ? "default" : "destructive",
+        title: "Trade submitted",
+        description: `Processing $${formatCurrency(amountNum)} stake...`,
+        variant: "default",
       })
     } catch (err) {
       toast({

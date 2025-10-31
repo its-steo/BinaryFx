@@ -89,9 +89,17 @@ export function TradeExecutionQueue({
 }: TradeExecutionQueueProps) {
   const { toast } = useToast()
   const [localTrades, setLocalTrades] = useState<ExecutingTrade[]>([])
-  const [message, setMessage] = useState<{ text: string; isProfit: boolean } | null>(null)
+  const [message, setMessage] = useState<{
+    text: string
+    isProfit: boolean
+    robotName?: string
+    amount?: number
+  } | null>(null)
   const [baseTradeParams, setBaseTradeParams] = useState<ExecutingTrade | null>(null)
   const [targetProfitReached, setTargetProfitReached] = useState(false)
+  const [processedTradeIds, setProcessedTradeIds] = useState<Set<string>>(new Set())
+  const [messageAcknowledged, setMessageAcknowledged] = useState(false)
+  const [shouldStopTrading, setShouldStopTrading] = useState(false)
   const maxLevels = 5
   const martingaleMultiplier = 2
 
@@ -106,50 +114,92 @@ export function TradeExecutionQueue({
       if (!baseTradeParams) {
         setBaseTradeParams(newTrade)
         setTargetProfitReached(false)
+        setShouldStopTrading(false)
       }
     } else {
       setLocalTrades([])
       setBaseTradeParams(null)
       setTargetProfitReached(false)
+      setShouldStopTrading(false)
     }
   }, [trades, baseTradeParams])
 
   useEffect(() => {
-    if (baseTradeParams && !targetProfitReached) {
+    if (baseTradeParams && !shouldStopTrading) {
       if (baseTradeParams.targetProfit > 0 && totalSessionProfit >= baseTradeParams.targetProfit) {
+        setShouldStopTrading(true)
         setTargetProfitReached(true)
-        const robotName = selectedRobot
-          ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name || "Robot"
-          : null
-        setMessage({
+        const robotName = selectedRobot ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name : null
+
+        const newMessage = {
           text: robotName
-            ? `Congratulations, ${robotName} has printed $${formatCurrency(totalSessionProfit)} successfully.`
-            : `Congratulations, target profit of $${formatCurrency(baseTradeParams.targetProfit)} attained! Profit: $${formatCurrency(totalSessionProfit)}`,
+            ? `Congratulations! Your ${robotName} has printed $${formatCurrency(totalSessionProfit)}. Your target has been hit!`
+            : `Congratulations! Your target profit of $${formatCurrency(baseTradeParams.targetProfit)} has been attained! Total profit: $${formatCurrency(totalSessionProfit)}`,
           isProfit: true,
-        })
+          robotName: robotName || undefined,
+          amount: totalSessionProfit,
+        }
+
+        setMessage(newMessage)
+        setMessageAcknowledged(false)
         onStopTrading?.()
         return
       }
       if (baseTradeParams.stopLoss > 0 && totalSessionProfit <= -baseTradeParams.stopLoss) {
+        setShouldStopTrading(true)
         setTargetProfitReached(true)
         setMessage({
           text: `Stop loss reached. Loss: $${Math.abs(totalSessionProfit).toFixed(2)}. Try again next round!`,
           isProfit: false,
+          amount: Math.abs(totalSessionProfit),
         })
+        setMessageAcknowledged(false)
         onStopTrading?.()
         return
       }
     }
-  }, [baseTradeParams, totalSessionProfit, targetProfitReached, selectedRobot, userRobots, onStopTrading])
+  }, [baseTradeParams, totalSessionProfit, shouldStopTrading, selectedRobot, userRobots, onStopTrading])
 
   useEffect(() => {
     const processTrades = async () => {
-      if (!isTradingActive || !baseTradeParams) return
+      if (!isTradingActive || !baseTradeParams || shouldStopTrading) return
 
-      // Process all pending trades in sequence
       for (let i = 0; i < localTrades.length; i++) {
         const trade = localTrades[i]
-        if (trade.status !== "pending") continue
+        if (trade.status !== "pending" || processedTradeIds.has(trade.id)) continue
+
+        if (baseTradeParams.targetProfit > 0 && totalSessionProfit >= baseTradeParams.targetProfit) {
+          setShouldStopTrading(true)
+          setTargetProfitReached(true)
+          const robotName = selectedRobot ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name : null
+
+          const newMessage = {
+            text: robotName
+              ? `Congratulations! Your ${robotName} has printed $${formatCurrency(totalSessionProfit)}. Your target has been hit!`
+              : `Congratulations! Your target profit of $${formatCurrency(baseTradeParams.targetProfit)} has been attained! Total profit: $${formatCurrency(totalSessionProfit)}`,
+            isProfit: true,
+            robotName: robotName || undefined,
+            amount: totalSessionProfit,
+          }
+
+          setMessage(newMessage)
+          setMessageAcknowledged(false)
+          onStopTrading?.()
+          return
+        }
+
+        if (baseTradeParams.stopLoss > 0 && totalSessionProfit <= -baseTradeParams.stopLoss) {
+          setShouldStopTrading(true)
+          setTargetProfitReached(true)
+          setMessage({
+            text: `Stop loss reached. Loss: $${Math.abs(totalSessionProfit).toFixed(2)}. Try again next round!`,
+            isProfit: false,
+            amount: Math.abs(totalSessionProfit),
+          })
+          setMessageAcknowledged(false)
+          onStopTrading?.()
+          return
+        }
 
         const currentAmount = trade.amount * Math.pow(martingaleMultiplier, trade.martingale_level)
 
@@ -184,6 +234,7 @@ export function TradeExecutionQueue({
               ),
             )
             onTradeComplete(trade.id, -currentAmount, false, currentAmount)
+            setProcessedTradeIds((prev) => new Set([...prev, trade.id]))
             if (typeof errMsg === "string" && errMsg.includes("Insufficient balance")) {
               setMessage({
                 text: "Insufficient balance. Trading stopped.",
@@ -232,9 +283,9 @@ export function TradeExecutionQueue({
             tradeData.current_spot ? Number.parseFloat(String(tradeData.current_spot)) : undefined,
           )
 
-          const updatedProfit = totalSessionProfit + profitValue
+          setProcessedTradeIds((prev) => new Set([...prev, trade.id]))
 
-          if (isTradingActive) {
+          if (!shouldStopTrading && isTradingActive) {
             let nextMartingaleLevel = 0
             let nextAmount = baseTradeParams.amount
             if (trade.use_martingale && !tradeData.is_win && trade.martingale_level + 1 < maxLevels) {
@@ -264,6 +315,7 @@ export function TradeExecutionQueue({
             ),
           )
           onTradeComplete(trade.id, -currentAmount, false, currentAmount)
+          setProcessedTradeIds((prev) => new Set([...prev, trade.id]))
           if (errorMessage.includes("Insufficient balance")) {
             setMessage({
               text: "Insufficient balance. Trading stopped.",
@@ -288,6 +340,8 @@ export function TradeExecutionQueue({
     onStopTrading,
     toast,
     accountType,
+    processedTradeIds,
+    shouldStopTrading,
   ])
 
   useEffect(() => {
@@ -313,67 +367,123 @@ export function TradeExecutionQueue({
   return (
     <div className="relative">
       <AnimatePresence>
-        {message && (
+        {message && !messageAcknowledged && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 p-6 rounded-lg shadow-2xl max-w-sm w-full ${
-              message.isProfit
-                ? "bg-gradient-to-br from-green-600 to-green-800"
-                : "bg-gradient-to-br from-red-600 to-red-800"
-            } text-white border border-white/20`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 flex items-center justify-center z-50 p-4"
           >
-            <div className="flex items-center space-x-3 mb-4">
-              {message.isProfit ? (
-                <motion.div
-                  animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.2, 1] }}
-                  transition={{ duration: 0.6, repeat: 1 }}
+            {/* Backdrop with blur effect */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              onClick={(e) => e.preventDefault()}
+            />
+
+            {/* Liquid glass card - Apple iOS 16 style */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative z-10 p-8 rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden"
+              style={{
+                background: "rgba(255, 255, 255, 0.15)",
+                backdropFilter: "blur(20px)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(255, 255, 255, 0.2)",
+              }}
+            >
+              {/* Gradient overlay for polish */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: message.isProfit
+                    ? "linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0) 100%)"
+                    : "linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0) 100%)",
+                }}
+              />
+
+              {/* Content */}
+              <div className="relative z-10">
+                {/* Icon */}
+                <div className="flex justify-center mb-6">
+                  <div
+                    className="p-4 rounded-full"
+                    style={{
+                      background: message.isProfit ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                      border: `2px solid ${message.isProfit ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)"}`,
+                    }}
+                  >
+                    {message.isProfit ? (
+                      <CheckCircle className="w-12 h-12 text-green-400" />
+                    ) : (
+                      <XCircle className="w-12 h-12 text-red-400" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Text Content */}
+                <div className="text-center mb-8">
+                  <p className="text-base font-semibold leading-relaxed text-white mb-4">{message.text}</p>
+                  {message.amount !== undefined && (
+                    <p className={`text-4xl font-bold ${message.isProfit ? "text-green-300" : "text-red-300"}`}>
+                      ${formatCurrency(message.amount)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Button */}
+                <Button
+                  onClick={() => {
+                    setMessageAcknowledged(true)
+                    setMessage(null)
+                  }}
+                  className="w-full font-bold py-3 rounded-xl transition-all text-white"
+                  style={{
+                    background: message.isProfit
+                      ? "linear-gradient(135deg, rgba(34, 197, 94, 0.8) 0%, rgba(22, 163, 74, 0.8) 100%)"
+                      : "linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%)",
+                    backdropFilter: "blur(10px)",
+                    border: `1px solid ${message.isProfit ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)"}`,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = message.isProfit
+                      ? "linear-gradient(135deg, rgba(34, 197, 94, 1) 0%, rgba(22, 163, 74, 1) 100%)"
+                      : "linear-gradient(135deg, rgba(239, 68, 68, 1) 0%, rgba(220, 38, 38, 1) 100%)"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = message.isProfit
+                      ? "linear-gradient(135deg, rgba(34, 197, 94, 0.8) 0%, rgba(22, 163, 74, 0.8) 100%)"
+                      : "linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%)"
+                  }}
                 >
-                  <CheckCircle className="w-8 h-8" />
-                </motion.div>
-              ) : (
-                <motion.div
-                  animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.2, 1] }}
-                  transition={{ duration: 0.6, repeat: 1 }}
-                >
-                  <XCircle className="w-8 h-8" />
-                </motion.div>
-              )}
-              <span className="text-base font-semibold">{message.text}</span>
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                onClick={() => setMessage(null)}
-                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 rounded-md"
-              >
-                Okay
-              </Button>
-              <Button
-                onClick={() => window.location.reload()}
-                className="flex-1 bg-white text-gray-900 hover:bg-gray-200 font-bold py-2 rounded-md"
-              >
-                Refresh Page
-              </Button>
-            </div>
+                  View Trade & Exit
+                </Button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
       <motion.div
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 50 }}
-        className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-md z-40 bg-gradient-to-br from-gray-800 to-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-white/20"
+        className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-md z-40 bg-gradient-to-br from-gray-800/40 to-gray-900/40 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-white/10 backdrop-blur-2xl"
       >
-        <div className="flex justify-between items-center px-4 sm:px-6 py-3 border-b border-white/10">
+        <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b border-white/5">
           <h3 className="text-lg font-bold text-white">Trade Execution</h3>
           <button
+            disabled={message !== null && !messageAcknowledged}
             onClick={() => {
-              setMessage({ text: "Trading stopped", isProfit: false })
               onClose?.()
             }}
-            className="text-white/60 hover:text-white"
+            className="text-white/60 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-5 h-5" />
           </button>
@@ -386,7 +496,7 @@ export function TradeExecutionQueue({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="p-4 rounded-lg bg-white/5 border border-white/20"
+                className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all"
               >
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-semibold text-white">
@@ -434,7 +544,7 @@ export function TradeExecutionQueue({
             ))}
           </AnimatePresence>
         </div>
-        <div className="border-t border-white/10 px-4 sm:p-6 py-4 bg-white/5 space-y-4">
+        <div className="border-t border-white/5 px-4 sm:p-6 py-4 bg-white/5 space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-xs text-white/60">Trades execute in less than 5 seconds</p>
             <div className="text-sm font-bold">
@@ -460,11 +570,10 @@ export function TradeExecutionQueue({
           </div>
           <Button
             onClick={() => {
-              setMessage({ text: "Trading stopped", isProfit: false })
               onStopTrading?.()
             }}
             disabled={!isTradingActive}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3"
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-all"
           >
             Stop Trading
           </Button>

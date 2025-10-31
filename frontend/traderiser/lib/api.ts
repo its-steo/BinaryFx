@@ -240,35 +240,8 @@ export const login = async (data: { email: string; password: string; account_typ
   return response
 }
 
-export const createAdditionalAccount = async (data: { account_type: string }) => {
-  const response = await apiRequest<{ user: Record<string, unknown>; active_account: Record<string, unknown> }>(
-    "/accounts/account/create/",
-    {
-      method: "POST",
-      body: JSON.stringify(data),
-    },
-  )
-
-  if (response.data) {
-    const { user, active_account } = response.data
-    if (user && active_account) {
-      const normalizedUser = {
-        ...user,
-        accounts: (user.accounts as Array<Record<string, unknown>>).map((acc) => ({
-          ...acc,
-          balance: Number(acc.balance) || 0,
-        })),
-      }
-      localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-      localStorage.setItem("account_type", (active_account.account_type as string) || "")
-      localStorage.setItem("login_type", (active_account.account_type as string) === "demo" ? "demo" : "real")
-      localStorage.setItem("active_account_id", (active_account.id as number).toString())
-      return { data: { user: normalizedUser, active_account }, status: response.status }
-    }
-  }
-
-  return response
-}
+export const createAdditionalAccount = (data: { account_type: string }) =>
+  apiRequest("/accounts/account/create/", { method: "POST", body: JSON.stringify(data) })
 
 export const getAccount = () => apiRequest("/accounts/account/")
 
