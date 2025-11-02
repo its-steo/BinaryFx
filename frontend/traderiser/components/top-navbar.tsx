@@ -1,7 +1,7 @@
 // components/top-navbar.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { TrendingUp, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,22 +31,63 @@ interface TopNavbarProps {
   onLogout?: () => void;
 }
 
+/* -------------------------------------------------
+   Helper: keep active account in sync with the rest
+   of the app via a custom event.
+   ------------------------------------------------- */
+const ACTIVE_ACCOUNT_KEY = "active_account_id";
+
+function getStoredAccountId(): number | null {
+  const raw = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+  return raw ? Number(raw) : null;
+}
+
 export function TopNavbar({
   isLoggedIn = false,
   user = null,
   accountBalance,
   showBalance = false,
-  activeAccount,
+  activeAccount: propActiveAccount,
   accounts,
   onSwitchAccount,
   onLogout,
 }: TopNavbarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(propActiveAccount);
+
+  /* -------------------------------------------------
+     Keep local state in sync with any external switch
+     (e.g. Sidebar) – listen to a custom event.
+     ------------------------------------------------- */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ account: Account }>;
+      setActiveAccount(ev.detail.account);
+    };
+    window.addEventListener("account-switch", handler);
+    return () => window.removeEventListener("account-switch", handler);
+  }, []);
+
+  /* -------------------------------------------------
+     When the parent passes a new activeAccount (first
+     render) make sure we store it.
+     ------------------------------------------------- */
+  useEffect(() => {
+    if (propActiveAccount) {
+      setActiveAccount(propActiveAccount);
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(propActiveAccount.id));
+    }
+  }, [propActiveAccount]);
 
   const handleAccountChange = (accountId: string) => {
-    const selectedAccount = accounts.find((acc) => acc.id === Number(accountId));
-    if (selectedAccount) {
-      onSwitchAccount(selectedAccount);
+    const selected = accounts.find((a) => a.id === Number(accountId));
+    if (selected) {
+      setActiveAccount(selected);
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(selected.id));
+      onSwitchAccount(selected);
+      window.dispatchEvent(
+        new CustomEvent("account-switch", { detail: { account: selected } })
+      );
       setIsMobileMenuOpen(false);
     }
   };
@@ -54,6 +95,7 @@ export function TopNavbar({
   const handleLogout = () => {
     onLogout?.();
     setIsMobileMenuOpen(false);
+    localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
     window.dispatchEvent(new Event("custom-storage-change"));
   };
 
