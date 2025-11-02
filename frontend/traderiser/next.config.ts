@@ -1,5 +1,7 @@
 // next.config.ts
 import type { NextConfig } from 'next';
+import { LoginType } from './app/fx-pro-robots/page';
+import { Account } from './types/account';
 const withPWA: any = require('next-pwa');
 
 const nextConfig: NextConfig = {
@@ -31,3 +33,7 @@ export default withPWA({
   swSrc: 'app/sw.js', // Path to the custom service worker source file
   swDest: 'sw.js', // Output filename for the generated service worker (in public/)
 })(nextConfig);
+interface SidebarProps {
+  loginType: LoginType;
+  activeAccount: Account | null;
+}

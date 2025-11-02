@@ -2,17 +2,23 @@
 import random
 from decimal import Decimal
 import logging
+import importlib
+import time
+import threading
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
-from .models import ForexPair, Position, ForexTrade
-from .serializers import ForexPairSerializer, PositionSerializer, ForexTradeSerializer
+from rest_framework import status, permissions, generics
+from .models import ForexPair, Position, ForexTrade, ForexRobot, UserRobot
+from .serializers import ForexPairSerializer, PositionSerializer, ForexTradeSerializer, ForexRobotSerializer, UserRobotSerializer
 from accounts.models import Account
 from wallet.models import Wallet, Currency
 from dashboard.models import Transaction
 from django.db import transaction
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
+from .serializers import BotLogSerializer
+from .models import BotLog
 
 logger = logging.getLogger(__name__)
 
@@ -258,3 +264,227 @@ class CloseAllPositionsView(APIView):
                 position.close_position(current_price, is_auto=False, close_reason='manual')
         
         return Response({'message': 'All positions closed successfully'}, status=status.HTTP_200_OK)
+    
+class ForexRobotListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not request.user.accounts.filter(account_type='pro-fx').exists():
+            return Response({'error': 'Pro-FX required'}, status=status.HTTP_403_FORBIDDEN)
+        robots = ForexRobot.objects.filter(is_active=True)
+        serializer = ForexRobotSerializer(robots, many=True)
+        return Response({'robots': serializer.data})
+
+
+class PurchaseRobotView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, robot_id):
+        if not request.user.accounts.filter(account_type='pro-fx').exists():
+            return Response({'error': 'Pro-FX required'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            robot = ForexRobot.objects.get(id=robot_id, is_active=True)
+        except ForexRobot.DoesNotExist:
+            return Response({'error': 'Robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if already owned
+        if UserRobot.objects.filter(user=request.user, robot=robot).exists():
+            return Response({'error': 'Already owned'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Deduct price
+        usd = Currency.objects.get(code='USD')
+        account = request.user.accounts.get(account_type='pro-fx')
+        wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
+
+        if wallet.balance < robot.price:
+            return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            wallet.balance -= robot.price
+            wallet.save()
+
+            user_robot = UserRobot.objects.create(user=request.user, robot=robot)
+
+            Transaction.objects.create(
+                account=account,
+                amount=-robot.price,
+                transaction_type='withdrawal',
+                description=f'Purchased robot: {robot.name}'
+            )
+
+        return Response({
+            'message': 'Robot purchased',
+            'user_robot': UserRobotSerializer(user_robot).data
+        }, status=status.HTTP_201_CREATED)
+
+
+# forex/views.py
+class MyRobotsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user_robots = UserRobot.objects.filter(user=request.user)
+        serializer = UserRobotSerializer(user_robots, many=True)
+        return Response({'user_robots': serializer.data}) 
+
+
+class ToggleRobotView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, user_robot_id):
+        try:
+            user_robot = UserRobot.objects.get(id=user_robot_id, user=request.user)
+        except UserRobot.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Extract config from payload
+        payload = request.data
+        stake = payload.get('stake')
+        pair_id = payload.get('pair_id')
+        timeframe = payload.get('timeframe')
+
+        if stake is not None:
+            user_robot.stake_per_trade = Decimal(str(stake))
+        if pair_id is not None:
+            user_robot.selected_pair_id = pair_id
+        if timeframe:
+            user_robot.timeframe = timeframe
+
+        is_starting = not user_robot.is_running
+        user_robot.is_running = is_starting
+        user_robot.save()
+
+        if is_starting:
+            # Run first trade synchronously
+            perform_robot_trade(user_robot)
+
+            # Start recurring trades in background thread
+            thread = threading.Thread(target=recurring_trade_loop, args=(user_robot.id,))
+            thread.daemon = True  # Dies with server
+            thread.start()
+
+        return Response({
+            'is_running': user_robot.is_running,
+            'message': 'Started' if user_robot.is_running else 'Stopped'
+        })
+
+
+# Helper function for recurring trades
+def recurring_trade_loop(user_robot_id):
+    while True:
+        try:
+            user_robot = UserRobot.objects.get(id=user_robot_id)
+            if not user_robot.is_running:
+                logger.info(f"Stopping trade loop for robot {user_robot_id}")
+                break
+
+            perform_robot_trade(user_robot)
+            time.sleep(10)  # Every 10 seconds
+        except UserRobot.DoesNotExist:
+            logger.error(f"UserRobot {user_robot_id} not found - stopping loop")
+            break
+        except Exception as e:
+            logger.error(f"Error in trade loop: {str(e)}")
+            time.sleep(10)  # Retry after delay
+
+
+# Simulation logic (moved from task.py)
+def perform_robot_trade(user_robot):
+    try:
+        robot = user_robot.robot
+        user = user_robot.user
+        is_sashi = getattr(user, 'is_sashi', False)
+        win_rate = robot.win_rate_sashi if is_sashi else robot.win_rate_normal
+
+        # Use user-configured stake
+        stake = user_robot.stake_per_trade
+        usd = Currency.objects.get(code='USD')
+        account = user.accounts.get(account_type='pro-fx')
+        wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
+
+        if wallet.balance < stake:
+            BotLog.objects.create(
+                user_robot=user_robot,
+                message=f"Insufficient balance: ${wallet.balance} < ${stake}. Stopping."
+            )
+            user_robot.is_running = False
+            user_robot.save()
+            return
+
+        # Realistic logs
+        BotLog.objects.create(
+            user_robot=user_robot,
+            message="Analyzing market conditions..."
+        )
+
+        # Deduct stake
+        wallet.balance -= stake
+        wallet.save()
+        BotLog.objects.create(
+            user_robot=user_robot,
+            message=f"Stake deducted: ${stake}"
+        )
+
+        # Simulate analysis delay
+        time.sleep(random.uniform(1, 3))  # Shorter for realism
+
+        BotLog.objects.create(
+            user_robot=user_robot,
+            message="Entering trade..."
+        )
+
+        # Simulate win/loss
+        is_win = random.random() * 100 < win_rate
+        profit = (stake * robot.profit_multiplier) if is_win else -stake
+
+        wallet.balance += stake + profit
+        wallet.save()
+
+        result = "WIN" if is_win else "LOSS"
+        BotLog.objects.create(
+            user_robot=user_robot,
+            message=f"Trade {result}! Profit: ${profit:+.2f} (x{robot.profit_multiplier})",
+            trade_result=result.lower(),
+            profit_loss=profit
+        )
+
+        Transaction.objects.create(
+            account=account,
+            amount=profit,
+            transaction_type='profit' if profit > 0 else 'loss',
+            description=f'Robot trade: {robot.name}'
+        )
+
+        user_robot.last_trade_time = timezone.now()
+        user_robot.save()
+
+    except Exception as e:
+        BotLog.objects.create(
+            user_robot=user_robot,
+            message=f"Error: {str(e)}"
+        )
+
+
+class BotLogListView(generics.ListAPIView):
+    """
+    GET /api/forex/robot-logs/                → all logs of the user
+    GET /api/forex/robot-logs/?user_robot_id=5 → logs for specific UserRobot
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = BotLogSerializer
+
+    def get_queryset(self):
+        queryset = BotLog.objects.filter(
+            user_robot__user=self.request.user
+        ).select_related('user_robot', 'user_robot__robot').order_by('-timestamp')
+
+        user_robot_id = self.request.query_params.get('user_robot_id')
+        if user_robot_id:
+            try:
+                user_robot_id = int(user_robot_id)
+                queryset = queryset.filter(user_robot_id=user_robot_id)
+            except ValueError:
+                pass  # ignore invalid ID
+
+        return queryset

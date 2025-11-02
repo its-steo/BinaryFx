@@ -550,7 +550,7 @@ export function TradeExecutionQueue({
             <div className="text-sm font-bold">
               <span className="text-white/60">Profit/Loss: </span>
               <span className={totalSessionProfit >= 0 ? "text-green-400" : "text-red-400"}>
-                {formatCurrency(totalSessionProfit)}
+                ${formatCurrency(totalSessionProfit)}
               </span>
             </div>
           </div>

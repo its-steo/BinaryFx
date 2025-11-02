@@ -1,37 +1,65 @@
-// components/fx-pro-trading/history-page.tsx
-"use client";
+"use client"
 
-import { useEffect } from "react";
-import { Card } from "@/components/ui/card";
-import { useTradeHistory } from "@/hooks/use-forex-data";
-import { toast } from "sonner";
+import { useEffect, useState } from "react"
+import { Card } from "@/components/ui/card"
+import { api } from "@/lib/api"
+
+interface Trade {
+  id: number
+  position: {
+    pair: {
+      name: string
+    }
+    direction: string
+    volume_lots: number
+    time_frame: string
+    entry_price: string | number
+  }
+  close_price: string | number
+  realized_p_l: string | number
+  close_reason: string
+  close_time: string
+}
 
 export default function HistoryPage() {
-  const { trades, isLoading, error } = useTradeHistory();
+  const [trades, setTrades] = useState<Trade[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        setIsLoading(true)
+        const res = await api.getForexHistory()
+        if (res.data && res.data.trades) {
+          setTrades(res.data.trades)
+        }
+      } catch (err) {
+        setError((err as Error).message || "Failed to load history")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadHistory()
+  }, [])
 
   const totalRealizedPL = trades
     ? trades.reduce((sum, trade) => {
-        const pl = typeof trade.realized_p_l === "string" ? parseFloat(trade.realized_p_l) : trade.realized_p_l;
-        return sum + (isNaN(pl) ? 0 : pl);
+        const pl = typeof trade.realized_p_l === "string" ? Number.parseFloat(trade.realized_p_l) : trade.realized_p_l
+        return sum + (isNaN(pl) ? 0 : pl)
       }, 0)
-    : 0;
+    : 0
 
-  const winRate = trades && trades.length > 0
-    ? (trades.filter((t) => {
-        const pl = typeof t.realized_p_l === "string" ? parseFloat(t.realized_p_l) : t.realized_p_l;
-        return pl > 0;
-      }).length / trades.length) * 100
-    : 0;
-
-  useEffect(() => {
-    if (error) {
-      if (error === "Pro-FX account required") {
-        toast.error("Pro-FX account required to view trade history");
-      } else {
-        toast.error(`Failed to load trade history: ${error}`);
-      }
-    }
-  }, [error]);
+  const winRate =
+    trades && trades.length > 0
+      ? (trades.filter((t) => {
+          const pl = typeof t.realized_p_l === "string" ? Number.parseFloat(t.realized_p_l) : t.realized_p_l
+          return pl > 0
+        }).length /
+          trades.length) *
+        100
+      : 0
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -63,26 +91,32 @@ export default function HistoryPage() {
           </Card>
         ) : (
           trades.map((trade) => (
-            <Card
-              key={trade.id}
-              className="p-4 bg-card/50 border-border hover:border-primary/50 transition-colors"
-            >
+            <Card key={trade.id} className="p-4 bg-card/50 border-border hover:border-primary/50 transition-colors">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h3 className="font-semibold text-foreground">{trade.position.pair.name}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {trade.position.direction.toUpperCase()} • {trade.position.volume_lots} lots • {trade.position.time_frame}
+                    {trade.position.direction.toUpperCase()} • {trade.position.volume_lots} lots •{" "}
+                    {trade.position.time_frame}
                   </p>
                 </div>
                 <div className="text-right">
                   <p
                     className={`font-bold ${
-                      (typeof trade.realized_p_l === "string" ? parseFloat(trade.realized_p_l) : trade.realized_p_l) >= 0
+                      (
+                        typeof trade.realized_p_l === "string"
+                          ? Number.parseFloat(trade.realized_p_l)
+                          : trade.realized_p_l
+                      ) >= 0
                         ? "text-green-500"
                         : "text-red-500"
                     }`}
                   >
-                    ${(typeof trade.realized_p_l === "string" ? parseFloat(trade.realized_p_l) : trade.realized_p_l).toFixed(2)}
+                    $
+                    {(typeof trade.realized_p_l === "string"
+                      ? Number.parseFloat(trade.realized_p_l)
+                      : trade.realized_p_l
+                    ).toFixed(2)}
                   </p>
                   <p className="text-xs text-muted-foreground capitalize">{trade.close_reason}</p>
                 </div>
@@ -92,7 +126,7 @@ export default function HistoryPage() {
                   <p>
                     Entry: $
                     {(typeof trade.position.entry_price === "string"
-                      ? parseFloat(trade.position.entry_price)
+                      ? Number.parseFloat(trade.position.entry_price)
                       : trade.position.entry_price
                     ).toFixed(5)}
                   </p>
@@ -101,7 +135,7 @@ export default function HistoryPage() {
                   <p>
                     Close: $
                     {(typeof trade.close_price === "string"
-                      ? parseFloat(trade.close_price)
+                      ? Number.parseFloat(trade.close_price)
                       : trade.close_price
                     ).toFixed(5)}
                   </p>
@@ -115,5 +149,5 @@ export default function HistoryPage() {
         )}
       </div>
     </div>
-  );
+  )
 }

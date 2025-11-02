@@ -22,6 +22,13 @@ export interface Wallet {
   created_at: string
 }
 
+export interface Account {
+  account_type: string;
+  login: string;
+  balance?: number;
+  activeAccount: boolean;
+}
+
 export interface WalletTransaction {
   id: number
   transaction_type: string
@@ -47,6 +54,45 @@ export interface ForexPair {
   contract_size: number
   spread: number
   base_simulation_price: number
+}
+export interface ForexRobot {
+  id: number
+  name: string
+  description: string
+  win_rate_normal: number
+  win_rate_sashi: number
+  price: number
+  is_active: boolean
+  created_at: string
+  image_url?: string
+  image?: string  
+}
+export interface UserRobot {
+  id: number
+  user: number
+  robot: ForexRobot
+  is_running: boolean
+  stake_amount: number
+  interval_seconds: number
+  created_at: string
+  updated_at: string
+  purchased_at: string
+  last_trade_time?: string
+}
+export interface BotLog {
+  id: number
+  user_robot: number
+  pair: ForexPair
+  entry_price: number
+  exit_price: number
+  result: "win" | "loss"
+  p_l: number
+  trade_time: string
+  timestamp: string
+  message: string;
+  profit_loss?: number | string;
+  trade_result?: "win" | "loss";
+ 
 }
 
 export interface Position {
@@ -374,6 +420,7 @@ export const resendOTP = (transactionId: string) =>
   apiRequest("/wallet/resend-otp/", { method: "POST", body: JSON.stringify({ transaction_id: transactionId }) })
 
 // Forex Trading API
+// Forex Trading API
 export const getForexPairs = () => apiRequest<{ pairs: ForexPair[] }>("/forex/pairs/")
 
 export const getForexCurrentPrice = (pairId: number) =>
@@ -396,6 +443,30 @@ export const closeAllPositions = () =>
   apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" })
 
 export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
+
+export const getForexRobots = () => apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
+
+export const getMyForexRobots = () =>
+  apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
+
+export const purchaseForexRobot = (robotId: number) =>
+  apiRequest<{ user_robot: UserRobot }>(`/forex/robots/${robotId}/purchase/`, { method: "POST" })
+
+export const toggleForexRobot = (
+  userRobotId: number,
+  config?: { stake?: number; pair_id?: number; timeframe?: string }
+) =>
+  apiRequest<{ is_running: boolean; message?: string }>(
+    `/forex/robots/${userRobotId}/toggle/`,
+    config
+      ? { method: "POST", body: JSON.stringify(config) }
+      : { method: "POST" }
+  );
+
+export const getForexBotLogs = () => apiRequest<{ bot_logs: BotLog[] }>("/forex/robot-logs/")
+
+export const getForexBotLogsByRobot = (userRobotId: number) =>
+  apiRequest<{ bot_logs: BotLog[] }>(`/forex/robot-logs/?user_robot_id=${userRobotId}`)
 
 export const api = {
   signup,
@@ -436,4 +507,11 @@ export const api = {
   closeForexPosition,
   getForexHistory,
   closeAllPositions,
+  getForexRobots,
+  getMyForexRobots,
+  purchaseForexRobot,
+  toggleForexRobot,
+  getForexBotLogs,
+  getForexBotLogsByRobot,
+
 }

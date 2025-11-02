@@ -3,6 +3,9 @@ import os
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
+from storages.backends.s3boto3 import S3Boto3Storage
+from decouple import config
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,8 +20,8 @@ ALLOWED_HOSTS = ['binaryfx-delta.vercel.app', 'binaryfx.onrender.com', ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    #"http://localhost:3000",
-    #"http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "https://binaryfx-delta.vercel.app",
     "https://binaryfx.onrender.com",
 ]
@@ -125,6 +128,38 @@ EMAIL_HOST_PASSWORD = 'jcsajscciezckcjr'  # App-specific password for Gmail
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = 'Grandview <grandviewshopafrica@gmail.com>'  # Must match EMAIL_HOST_USER or a verified alias
 ADMIN_EMAIL = 'grandviewshopafrica@gmail.com'  # Admin email for deposit notifications
+
+# ──────────────────────────────────────────────────────────────
+#  S3 / Media – read from .env
+# ──────────────────────────────────────────────────────────────
+from decouple import config, Csv
+
+# ---- AWS credentials ------------------------------------------------
+AWS_ACCESS_KEY_ID      = config('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY  = config('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME     = config('AWS_S3_REGION_NAME', default='us-east-1')
+
+# ---- Optional S3 tweaks --------------------------------------------
+AWS_S3_CUSTOM_DOMAIN   = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+AWS_DEFAULT_ACL        = config('AWS_DEFAULT_ACL', default=None, cast=lambda v: None if v == 'None' else v)
+AWS_S3_FILE_OVERWRITE  = config('AWS_S3_FILE_OVERWRITE', default=False, cast=bool)
+
+# ---- Storage choice -------------------------------------------------
+if DEBUG:
+    # ---- LOCAL DEVELOPMENT (no S3, no credentials needed) ----------
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    MEDIA_ROOT = BASE_DIR / 'media'
+    MEDIA_URL  = '/media/'
+else:
+    # ---- PRODUCTION / STAGING (real S3) -----------------------------
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# Optional: Ensure media URLs point to S3
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
+
+
 
 
 AUTH_PASSWORD_VALIDATORS = [

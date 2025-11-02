@@ -1,8 +1,7 @@
-// components/bottom-navifation.tsx
 "use client"
 
 import { useState, useEffect } from "react"
-import { MessageCircle, TrendingUp, History, Home } from "lucide-react"
+import { TrendingUp, History, Home, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface BottomNavigationProps {
@@ -31,7 +30,7 @@ export default function BottomNavigation({ currentPage, onPageChange }: BottomNa
 
   const navItems = [
     { id: "main", label: "Home", icon: Home },
-    { id: "chat", label: "Chat", icon: MessageCircle },
+    { id: "robots", label: "Bots", icon: Zap },
     { id: "trades", label: "Trades", icon: TrendingUp },
     { id: "history", label: "History", icon: History },
   ]

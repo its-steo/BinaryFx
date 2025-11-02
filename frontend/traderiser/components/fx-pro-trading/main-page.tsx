@@ -1,23 +1,20 @@
-// components/fx-pro-trading/main-page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
 import { Plus } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import MarketDropdown from "@/components/market-dropdown"
 import WalletDisplay from "@/components/wallet-display"
 import { TradingViewChart } from "@/components/fx-pro-trading/trading-view-chart"
 import PlaceOrderModal from "@/components/fx-pro-trading/place-modal"
 import { mutate } from "swr"
 import { toast } from "sonner"
-//import { ForexPair } from "@/app/forex/models"; // Adjust import based on your project structure
 
 export default function MainPage() {
   const [pairId, setPairId] = useState<number | null>(1)
   const [modalOpen, setModalOpen] = useState(false)
   const [direction, setDirection] = useState<"buy" | "sell">("buy")
-  const [timeFrame, setTimeFrame] = useState<string>("M1") // Default to 1 minute
+  const [timeFrame, setTimeFrame] = useState<string>("D")
 
   const openModal = (dir: "buy" | "sell") => {
     setDirection(dir)
@@ -37,7 +34,17 @@ export default function MainPage() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-muted-foreground">Select Market</label>
-        <MarketDropdown selectedMarket={pairId} onSelectMarket={setPairId} />
+        <select
+          value={pairId || 1}
+          onChange={(e) => setPairId(Number(e.target.value))}
+          className="w-full px-3 py-2 bg-muted border border-border rounded"
+        >
+          {[1, 2, 3, 4, 5].map((id) => (
+            <option key={id} value={id}>
+              Market {id}
+            </option>
+          ))}
+        </select>
       </div>
 
       <Card className="p-3">
@@ -53,7 +60,17 @@ export default function MainPage() {
         >
           {["M1", "M5", "M15", "H1", "H4", "D1"].map((tf) => (
             <option key={tf} value={tf}>
-              {tf === "M1" ? "1 Minute" : tf === "M5" ? "5 Minutes" : tf === "M15" ? "15 Minutes" : tf === "H1" ? "1 Hour" : tf === "H4" ? "4 Hours" : "24 Hours"}
+              {tf === "M1"
+                ? "1 Minute"
+                : tf === "M5"
+                  ? "5 Minutes"
+                  : tf === "M15"
+                    ? "15 Minutes"
+                    : tf === "H1"
+                      ? "1 Hour"
+                      : tf === "H4"
+                        ? "4 Hours"
+                        : "24 Hours"}
             </option>
           ))}
         </select>

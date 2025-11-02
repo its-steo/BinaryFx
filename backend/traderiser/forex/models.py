@@ -5,9 +5,23 @@ from django.utils import timezone
 from accounts.models import Account, User
 from wallet.models import Wallet, Currency
 from dashboard.models import Transaction
+from storages.backends.s3boto3 import S3Boto3Storage
 import logging
 
 logger = logging.getLogger(__name__)
+
+# ──────────────────────────────────────────────────────────────
+# SHARED CHOICES — DEFINED AT TOP LEVEL
+# ──────────────────────────────────────────────────────────────
+TIME_FRAMES = [
+    ('M1', '1 Minute'),
+    ('M5', '5 Minutes'),
+    ('M15', '15 Minutes'),
+    ('H1', '1 Hour'),
+    ('H4', '4 Hours'),
+    ('D1', '24 Hours'),
+]
+
 
 class ForexPair(models.Model):
     name = models.CharField(max_length=10, unique=True)
@@ -17,14 +31,6 @@ class ForexPair(models.Model):
     contract_size = models.IntegerField(default=100000)  # Standard contract size (e.g., 100,000 units)
     spread = models.DecimalField(max_digits=10, decimal_places=5, default=Decimal('0.0001'))  # Spread in pips
     base_simulation_price = models.DecimalField(max_digits=10, decimal_places=5, default=Decimal('1.1000'))
-    TIME_FRAMES = [
-        ('M1', '1 Minute'),
-        ('M5', '5 Minutes'),
-        ('M15', '15 Minutes'),
-        ('H1', '1 Hour'),
-        ('H4', '4 Hours'),
-        ('D1', '24 Hours'),
-    ]
     default_time_frame = models.CharField(max_length=3, choices=TIME_FRAMES, default='M1')
 
     def __str__(self):
@@ -38,12 +44,7 @@ class ForexPair(models.Model):
 
         # Adjust volatility based on time frame
         time_frame_multiplier = {
-            'M1': 1,
-            'M5': 5,
-            'M15': 15,
-            'H1': 60,
-            'H4': 240,
-            'D1': 1440,
+            'M1': 1, 'M5': 5, 'M15': 15, 'H1': 60, 'H4': 240, 'D1': 1440,
         }
         volatility_scale = time_frame_multiplier[time_frame] / 60  # Normalize to minutes
 
@@ -58,6 +59,7 @@ class ForexPair(models.Model):
 
         volatility = Decimal(str(random.uniform(-0.0005, 0.0005) * volatility_scale))
         return max(self.base_simulation_price + volatility, Decimal('0.0001'))
+
 
 class Position(models.Model):
     DIRECTIONS = [('buy', 'Buy'), ('sell', 'Sell')]
@@ -75,7 +77,7 @@ class Position(models.Model):
     floating_p_l = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     status = models.CharField(max_length=6, choices=STATUSES, default='open')
     leverage = models.IntegerField(default=500)
-    time_frame = models.CharField(max_length=3, choices=ForexPair.TIME_FRAMES, default='M1')
+    time_frame = models.CharField(max_length=3, choices=TIME_FRAMES, default='M1')  # ← Fixed
 
     class Meta:
         ordering = ['-entry_time']
@@ -184,6 +186,7 @@ class Position(models.Model):
             return False
         return self.floating_p_l <= 0 and abs(self.floating_p_l) >= wallet_balance
 
+
 class ForexTrade(models.Model):
     position = models.OneToOneField(Position, on_delete=models.CASCADE)
     close_price = models.DecimalField(max_digits=10, decimal_places=5)
@@ -193,3 +196,92 @@ class ForexTrade(models.Model):
 
     def __str__(self):
         return f"Closed: {self.position}"
+
+
+# Configure storage
+s3_storage = S3Boto3Storage()
+
+
+class ForexRobot(models.Model):
+    ROBOT_MARKETS = [
+        ('forex', 'Forex'),
+        ('crypto', 'Crypto'),
+        ('indices', 'Indices'),
+        ('commodities', 'Commodities'),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    image = models.ImageField(
+        upload_to='robots/',
+        storage=S3Boto3Storage(),
+        blank=True,
+        null=True
+    )
+    description = models.TextField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    best_markets = models.CharField(max_length=20, choices=ROBOT_MARKETS)
+    win_rate_sashi = models.IntegerField(default=90)
+    win_rate_normal = models.IntegerField(default=10)
+    stake_per_trade = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('10.00'))
+    
+    # Profit multiplier
+    profit_multiplier = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('1.00'),
+        help_text="Profit = stake × multiplier on win (e.g., 2.00 = 2:1 RR)"
+    )
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def image_url(self):
+        if self.image:
+            return self.image.url
+        return None
+
+
+class UserRobot(models.Model):
+    user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='robots')
+    robot = models.ForeignKey(ForexRobot, on_delete=models.CASCADE)
+    purchased_at = models.DateTimeField(auto_now_add=True)
+    is_running = models.BooleanField(default=False)
+    last_trade_time = models.DateTimeField(null=True, blank=True)
+
+    # User-configurable settings
+    stake_per_trade = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('10.00'),
+        help_text="Stake amount per trade (overrides robot default)"
+    )
+    selected_pair = models.ForeignKey(
+        ForexPair, null=True, blank=True, on_delete=models.SET_NULL,
+        help_text="Pair to trade (optional)"
+    )
+    timeframe = models.CharField(
+        max_length=3, choices=TIME_FRAMES, default='M1',  # ← Fixed
+        help_text="Chart timeframe for simulation"
+    )
+
+    class Meta:
+        unique_together = ('user', 'robot')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.robot.name}"
+
+
+class BotLog(models.Model):
+    user_robot = models.ForeignKey(UserRobot, on_delete=models.CASCADE, related_name='logs')
+    message = models.TextField()
+    trade_result = models.CharField(max_length=10, null=True, blank=True)  # 'win', 'loss', null
+    profit_loss = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Log {self.id} - {self.user_robot}"

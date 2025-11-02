@@ -5,24 +5,31 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { LayoutDashboard, TrendingUp, LogOut, Menu, X, WalletIcon, Bot, User, Zap } from "lucide-react"
 import { useState, useEffect } from "react"
+import type { Account } from "@/types/account";
 
-interface Account {
-  id: number;
-  account_type: string;
-  balance: number;
-  kyc_verified?: boolean;
-}
+type LoginType = "real" | "demo" | string;
 
 interface SidebarProps {
-  loginType: string
-  activeAccount: Account | null
+  loginType: LoginType;
+  activeAccount?: Account | null;
 }
 
-export function Sidebar({ loginType, activeAccount }: SidebarProps) {
+export function Sidebar({ loginType, activeAccount: initialAccount }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [hasProFxAccount, setHasProFxAccount] = useState(false)
+  const [activeAccount, setActiveAccount] = useState<Account | null>(initialAccount ?? null)
+
+  // Auto-update balance when WalletDisplay fires event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const newBalance = (e as CustomEvent).detail
+      setActiveAccount(prev => prev ? { ...prev, balance: newBalance } : prev)
+    }
+    window.addEventListener("balance-updated", handler)
+    return () => window.removeEventListener("balance-updated", handler)
+  }, [])
 
   useEffect(() => {
     const userSession = localStorage.getItem("user_session")
@@ -54,13 +61,13 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
     router.push("/login")
   }
 
-  // Determine navigation items based on account type
   const navItems =
     loginType === "real" && activeAccount
       ? activeAccount.account_type === "pro-fx"
         ? [
             { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
             { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap },
+            { href: "/fx-pro-robots", label: "Pro-Robots", icon: Bot },
             { href: "/wallet", label: "Wallet", icon: WalletIcon },
             { href: "/profile", label: "Profile", icon: User },
           ]
@@ -95,15 +102,13 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
           isOpen ? "translate-x-0" : "-translate-x-full"
         } md:w-64 md:flex md:flex-col md:gap-4 md:p-4 md:pt-0`}
       >
-        {/* Top section with full image background */}
         <div
-          className="h-48 w-full bg-cover bg-center relative" // Increased height to h-48 for full top coverage
-          style={{ backgroundImage: "url('/sidebg.jpg')" }} // Replace with the actual image path
+          className="h-48 w-full bg-cover bg-center relative"
+          style={{ backgroundImage: "url('/sidebg.jpg')" }}
         >
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-transparent"></div>
         </div>
 
-        {/* Account info and navigation section */}
         <div className="flex flex-col gap-4 p-4">
           {activeAccount && (
             <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-lg">
@@ -115,7 +120,10 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
                   {activeAccount.account_type.charAt(0).toUpperCase() + activeAccount.account_type.slice(1)}
                 </p>
                 <p className="text-xs text-white/70">
-                  ${isNaN(activeAccount.balance) ? "0.00" : Number(activeAccount.balance).toFixed(2)}
+                  ${(() => {
+                    const bal = Number(activeAccount.balance ?? 0)
+                    return isNaN(bal) ? "0.00" : bal.toFixed(2)
+                  })()}
                 </p>
               </div>
             </div>
@@ -146,7 +154,7 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
             })}
           </nav>
         </div>
-        
+
         <div className="absolute bottom-4 left-4 right-4 flex flex-col gap-3">
           <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2">
             <p className="text-xs font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-pink-500">
@@ -154,17 +162,6 @@ export function Sidebar({ loginType, activeAccount }: SidebarProps) {
             </p>
             <p className="text-xs text-white/70">Binary FX</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-white/70 hover:text-red-400 hover:bg-red-500/10 transition-all w-full group"
-          >
-            <LogOut size={20} className="text-white/70 group-hover:text-red-400" />
-            <span className="font-medium">Logout</span>
-          </button>
-        </div>
-
-        {/* Logout button below the sidebar content */}
-        <div className="absolute bottom-4 left-4 right-4">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-white/70 hover:text-red-400 hover:bg-red-500/10 transition-all w-full group"
