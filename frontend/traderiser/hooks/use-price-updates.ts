@@ -1,5 +1,5 @@
 // hooks/use-price-updates.ts
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForexPairs, usePositions } from './use-forex-data';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -64,6 +64,13 @@ export const usePriceUpdates = () => {
   const [pairIds, setPairIds] = useState<number[]>([]);
   const [isSashi, setIsSashi] = useState<boolean>(false);
 
+  const simulatorsRef = useRef<Record<number, PriceSimulator>>({});
+
+  // Keep ref in sync
+  useEffect(() => {
+    simulatorsRef.current = simulators;
+  }, [simulators]);
+
   useEffect(() => {
     const fetchSashiStatus = async () => {
       try {
@@ -116,21 +123,24 @@ export const usePriceUpdates = () => {
     setPrices(initialPrices);
   }, [pairs, positions, pairsLoading, positionsLoading, isSashi]);
 
+  // Price update loop — runs once, uses ref
   useEffect(() => {
-    if (Object.keys(simulators).length === 0) return;
+    if (Object.keys(simulatorsRef.current).length === 0) return;
 
     const updatePrices = () => {
       const newPrices: Record<number, number> = {};
-      Object.keys(simulators).forEach((pairId) => {
-        newPrices[Number(pairId)] = simulators[Number(pairId)].getCurrentPrice();
+      Object.keys(simulatorsRef.current).forEach((pairIdStr) => {
+        const pairId = Number(pairIdStr);
+        newPrices[pairId] = simulatorsRef.current[pairId].getCurrentPrice();
       });
       setPrices(newPrices);
     };
 
     updatePrices();
     const interval = setInterval(updatePrices, 1000);
+
     return () => clearInterval(interval);
-  }, [simulators]);
+  }, []); // Runs only once
 
   useEffect(() => {
     if (pairIds.length === 0) return;
@@ -145,21 +155,23 @@ export const usePriceUpdates = () => {
         const data = response.data as any;
         if (data?.prices) {
           setPrices((prev) => ({ ...prev, ...data.prices }));
-          Object.keys(data.prices).forEach((pairId) => {
-            if (simulators[Number(pairId)]) {
-              const position = positions.find((pos) => pos.pair.id === Number(pairId));
-              simulators[Number(pairId)] = new PriceSimulator(
-                data.prices[Number(pairId)],
-                isSashi,
-                position ? position.direction : 'buy',
-                0.0005,
-                position ? position.time_frame : 'M1'
-              );
-              if (position) {
-                simulators[Number(pairId)].setEntryTime(position.entry_time);
-              }
+
+          const newSimulators: Record<number, PriceSimulator> = { ...simulatorsRef.current };
+          Object.keys(data.prices).forEach((pairIdStr) => {
+            const pairId = Number(pairIdStr);
+            const position = positions.find((pos) => pos.pair.id === pairId);
+            newSimulators[pairId] = new PriceSimulator(
+              data.prices[pairId],
+              isSashi,
+              position ? position.direction : 'buy',
+              0.0005,
+              position ? position.time_frame : 'M1'
+            );
+            if (position) {
+              newSimulators[pairId].setEntryTime(position.entry_time);
             }
           });
+          setSimulators(newSimulators);
         }
       } catch (error) {
         console.error('Error syncing prices:', error);
@@ -170,7 +182,7 @@ export const usePriceUpdates = () => {
     syncWithBackend();
     const syncInterval = setInterval(syncWithBackend, 30000);
     return () => clearInterval(syncInterval);
-  }, [pairIds, simulators, positions, isSashi]);
+  }, [pairIds, positions, isSashi]);
 
   useEffect(() => {
     if (pairsError) {
@@ -182,4 +194,4 @@ export const usePriceUpdates = () => {
   }, [pairsError, positionsError]);
 
   return { prices, pairIds, isLoading: pairsLoading || positionsLoading, isSashi };
-}
+};

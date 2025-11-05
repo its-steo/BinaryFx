@@ -1,4 +1,3 @@
-// lib/api.ts
 //const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://binaryfx.onrender.com/api"
 
@@ -23,10 +22,10 @@ export interface Wallet {
 }
 
 export interface Account {
-  account_type: string;
-  login: string;
-  balance?: number;
-  activeAccount: boolean;
+  account_type: string
+  login: string
+  balance?: number
+  activeAccount: boolean
 }
 
 export interface WalletTransaction {
@@ -55,6 +54,7 @@ export interface ForexPair {
   spread: number
   base_simulation_price: number
 }
+
 export interface ForexRobot {
   id: number
   name: string
@@ -65,8 +65,9 @@ export interface ForexRobot {
   is_active: boolean
   created_at: string
   image_url?: string
-  image?: string  
+  image?: string
 }
+
 export interface UserRobot {
   id: number
   user: number
@@ -79,6 +80,7 @@ export interface UserRobot {
   purchased_at: string
   last_trade_time?: string
 }
+
 export interface BotLog {
   id: number
   user_robot: number
@@ -89,10 +91,9 @@ export interface BotLog {
   p_l: number
   trade_time: string
   timestamp: string
-  message: string;
-  profit_loss?: number | string;
-  trade_result?: "win" | "loss";
- 
+  message: string
+  profit_loss?: number | string
+  trade_result?: "win" | "loss"
 }
 
 export interface Position {
@@ -126,84 +127,248 @@ export interface WalletBalance {
   account_type: string
 }
 
+export interface Agent {
+  id: number
+  name: string
+  method: string
+  location: string
+  rating: number
+  reviews: number
+  deposit_rate_kes_to_usd: number
+  withdrawal_rate_usd_to_kes: number
+  min_amount?: number
+  max_amount?: number
+  response_time?: string
+  verified: boolean
+  image?: string
+  instructions?: string
+}
+
+export interface AgentDeposit {
+  id: number
+  agent: number
+  amount_kes: number
+  amount_usd: number
+  status: "pending" | "verified" | "rejected"
+  screenshot_url?: string
+  created_at: string
+}
+
+export interface AgentWithdrawal {
+  id: number
+  agent: number
+  amount_usd: number
+  amount_kes: number
+  phone_number: string
+  status: "pending" | "otp_sent" | "verified" | "completed" | "cancelled"
+  otp_code?: string
+  created_at: string
+}
+
+export interface ChatMessage {
+  id: number
+  content: string
+  sent_at: string
+  is_read: boolean
+  is_system: boolean
+  sender: {
+    id: number
+    username: string
+    email: string
+    is_staff: boolean
+  }
+  is_me: boolean
+}
+
+export interface ChatThread {
+  id: number
+  is_active: boolean
+  messages: ChatMessage[]
+  block_info: {
+    type?: "permanent" | "temporary"
+    title?: string
+    message?: string
+    can_request_review?: boolean
+  } | null
+}
+
+export interface UserSession {
+  id?: number
+  username?: string
+  email?: string
+  accounts?: UserAccount[]
+  [key: string]: unknown
+}
+
+export interface UserAccount {
+  id: number
+  account_type: string
+  balance: number
+  [key: string]: unknown
+}
+
+/* ------------------------------------------------------------------ */
+/*  TOKEN KEYS – MUST MATCH login/signup response                     */
+/* ------------------------------------------------------------------ */
+const ACCESS_KEY = "access_token"
+const REFRESH_KEY = "refresh_token"
+const ADMIN_KEY = "is_admin"
+
+const getAccess = () => localStorage.getItem(ACCESS_KEY)
+const getRefresh = () => localStorage.getItem(REFRESH_KEY)
+const setAccess = (token: string) => localStorage.setItem(ACCESS_KEY, token)
+const clearAuth = () => {
+  localStorage.removeItem(ACCESS_KEY)
+  localStorage.removeItem(REFRESH_KEY)
+  localStorage.removeItem("account_type")
+  localStorage.removeItem("login_type")
+  localStorage.removeItem("user_session")
+  localStorage.removeItem("active_account_id")
+  localStorage.removeItem(ADMIN_KEY)
+}
+
+/* ------------------------------------------------------------------ */
+/*  REFRESH TOKEN – uses correct endpoint                             */
+/* ------------------------------------------------------------------ */
 export async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem("refresh_token")
-  if (!refreshToken) return null
+  const refresh = getRefresh()
+  if (!refresh) return null
 
   try {
-    const response = await fetch(`${API_BASE_URL}/token/refresh/`, {
+    const res = await fetch(`${API_BASE_URL}/accounts/token/refresh/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh: refreshToken }),
+      body: JSON.stringify({ refresh }),
     })
 
-    if (response.ok) {
-      const data = await response.json()
-      localStorage.setItem("access_token", data.access)
-      return data.access
-    } else {
-      throw new Error(`Token refresh failed with status ${response.status}`)
+    if (!res.ok) {
+      console.error("[api] Refresh failed:", await res.json().catch(() => ({})))
+      clearAuth()
+      return null
     }
-  } catch (error) {
-    console.error("[v0] Token refresh failed:", error)
-    localStorage.removeItem("access_token")
-    localStorage.removeItem("refresh_token")
-    localStorage.removeItem("account_type")
-    localStorage.removeItem("login_type")
-    localStorage.removeItem("user_session")
-    localStorage.removeItem("active_account_id")
+
+    const { access } = (await res.json()) as { access: string }
+    setAccess(access)
+    return access
+  } catch (e) {
+    console.error("[api] Refresh network error:", e)
+    clearAuth()
     return null
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  CORE JSON REQUEST                                                 */
+/* ------------------------------------------------------------------ */
 export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  try {
-    const token = localStorage.getItem("access_token")
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(options.headers as Record<string, string>),
+  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`
+
+  const token = getAccess()
+  const headers = new Headers({
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  })
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+
+  let resp = await fetch(url, { ...options, headers })
+
+  // Auto-refresh on 401
+  if (resp.status === 401 && token && !endpoint.includes("token/refresh")) {
+    const newToken = await refreshAccessToken()
+    if (!newToken) {
+      return { error: "Session expired. Please log in again.", status: 401 }
     }
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`
-    }
-
-    let response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    })
-
-    if (response.status === 401 && token && !endpoint.includes("token/refresh/")) {
-      const newToken = await refreshAccessToken()
-      if (newToken) {
-        headers["Authorization"] = `Bearer ${newToken}`
-        response = await fetch(`${API_BASE_URL}${endpoint}`, {
-          ...options,
-          headers,
-        })
-      } else {
-        return { error: "Session expired. Please log in again.", status: 401 }
-      }
-    }
-
-    let json
-    try {
-      json = await response.json()
-    } catch (e) {
-      return { error: `Invalid response format from ${endpoint}`, status: response.status }
-    }
-
-    if (!response.ok) {
-      const errorMsg = json?.detail || json?.error || `Request to ${endpoint} failed with status ${response.status}`
-      return { error: errorMsg, status: response.status }
-    }
-
-    return { data: json, status: response.status }
-  } catch (error) {
-    return { error: (error as Error).message || `Network error calling ${endpoint}`, status: 500 }
+    headers.set("Authorization", `Bearer ${newToken}`)
+    resp = await fetch(url, { ...options, headers })
   }
+
+  let json: T | Record<string, unknown>
+  try {
+    json = (await resp.json()) as T | Record<string, unknown>
+  } catch {
+    return { error: "Invalid JSON from server", status: resp.status }
+  }
+
+  if (!resp.ok) {
+    const detail = (json as Record<string, unknown>)?.detail
+    const error = (json as Record<string, unknown>)?.error
+    const msg =
+      (typeof detail === "string" ? detail : undefined) ??
+      (typeof error === "string" ? error : undefined) ??
+      `Request failed (${resp.status})`
+    return { error: msg, status: resp.status }
+  }
+
+  return { data: json as T, status: resp.status }
 }
 
+/* ------------------------------------------------------------------ */
+/*  FILE UPLOAD REQUEST (Agent Deposit)                               */
+/* ------------------------------------------------------------------ */
+export async function apiRequestWithFile<T>(
+  endpoint: string,
+  formData: FormData,
+  options: Omit<RequestInit, "body"> = {},
+): Promise<ApiResponse<T>> {
+  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`
+  const token = getAccess()
+  const headers = new Headers(options.headers as Record<string, string>)
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`)
+  }
+
+  // DO NOT set Content-Type → let browser set multipart boundary
+
+  let resp = await fetch(url, {
+    ...options,
+    method: "POST",
+    headers,
+    body: formData,
+    credentials: "include",
+  })
+
+  // Token refresh logic...
+  if (resp.status === 401 && token && !endpoint.includes("token/refresh")) {
+    const newToken = await refreshAccessToken()
+    if (!newToken) {
+      return { error: "Session expired. Please log in again.", status: 401 }
+    }
+    headers.set("Authorization", `Bearer ${newToken}`)
+    resp = await fetch(url, {
+      ...options,
+      method: "POST",
+      headers,
+      body: formData,
+      credentials: "include",
+    })
+  }
+
+  let json: T | Record<string, unknown>
+  try {
+    json = (await resp.json()) as T | Record<string, unknown>
+  } catch {
+    return { error: "Invalid JSON from server", status: resp.status }
+  }
+
+  if (!resp.ok) {
+    const screenshot = (json as Record<string, unknown>)?.screenshot
+    const screenshotError = Array.isArray(screenshot) ? screenshot[0] : undefined
+    const detail = (json as Record<string, unknown>)?.detail
+    const error = (json as Record<string, unknown>)?.error
+    const msg =
+      (typeof screenshotError === "string" ? screenshotError : undefined) ??
+      (typeof detail === "string" ? detail : undefined) ??
+      (typeof error === "string" ? error : undefined) ??
+      `Upload failed (${resp.status})`
+    return { error: msg, status: resp.status }
+  }
+
+  return { data: json as T, status: resp.status }
+}
+/* ------------------------------------------------------------------ */
+/*  AUTH METHODS                                                      */
+/* ------------------------------------------------------------------ */
 export const signup = async (data: {
   username: string
   email: string
@@ -214,7 +379,7 @@ export const signup = async (data: {
   const response = await apiRequest<{
     access: string
     refresh: string
-    user: Record<string, unknown>
+    user: UserSession
     active_account: Record<string, unknown>
   }>("/accounts/signup/", {
     method: "POST",
@@ -226,22 +391,19 @@ export const signup = async (data: {
     localStorage.setItem("refresh_token", response.data.refresh)
     localStorage.setItem("account_type", data.account_type)
     localStorage.setItem("login_type", data.account_type === "demo" ? "demo" : "real")
-    const normalizedUser = {
+    const normalizedUser: UserSession = {
       ...response.data.user,
-      accounts: (response.data.user as Record<string, unknown>).accounts
-        ? ((response.data.user as Record<string, unknown>).accounts as Array<Record<string, unknown>>).map((acc) => ({
-            ...acc,
-            balance: Number(acc.balance) || 0,
-          }))
-        : [],
+      accounts: ((response.data.user.accounts || []) as UserAccount[]).map((acc: UserAccount) => ({
+        ...acc,
+        balance: Number(acc.balance) || 0,
+      })),
     }
     localStorage.setItem("user_session", JSON.stringify(normalizedUser))
     const defaultAccount =
-      (normalizedUser.accounts as Array<Record<string, unknown>>).find(
-        (acc) => acc.account_type === data.account_type,
-      ) || (normalizedUser.accounts as Array<Record<string, unknown>>)[0]
+      (normalizedUser.accounts as UserAccount[])?.find((acc: UserAccount) => acc.account_type === data.account_type) ||
+      (normalizedUser.accounts as UserAccount[])?.[0]
     if (defaultAccount) {
-      localStorage.setItem("active_account_id", (defaultAccount.id as number).toString())
+      localStorage.setItem("active_account_id", defaultAccount.id.toString())
     }
   }
 
@@ -252,7 +414,7 @@ export const login = async (data: { email: string; password: string; account_typ
   const response = await apiRequest<{
     access: string
     refresh: string
-    user: Record<string, unknown>
+    user: UserSession
     active_account: Record<string, unknown>
   }>("/accounts/login/", {
     method: "POST",
@@ -264,23 +426,43 @@ export const login = async (data: { email: string; password: string; account_typ
     localStorage.setItem("refresh_token", response.data.refresh)
     localStorage.setItem("account_type", data.account_type)
     localStorage.setItem("login_type", data.account_type === "demo" ? "demo" : "real")
-    const normalizedUser = {
+    const normalizedUser: UserSession = {
       ...response.data.user,
-      accounts: (response.data.user as Record<string, unknown>).accounts
-        ? ((response.data.user as Record<string, unknown>).accounts as Array<Record<string, unknown>>).map((acc) => ({
-            ...acc,
-            balance: Number(acc.balance) || 0,
-          }))
-        : [],
+      accounts: ((response.data.user.accounts || []) as UserAccount[]).map((acc: UserAccount) => ({
+        ...acc,
+        balance: Number(acc.balance) || 0,
+      })),
     }
     localStorage.setItem("user_session", JSON.stringify(normalizedUser))
     const defaultAccount =
-      (normalizedUser.accounts as Array<Record<string, unknown>>).find(
-        (acc) => acc.account_type === data.account_type,
-      ) || (normalizedUser.accounts as Array<Record<string, unknown>>)[0]
+      (normalizedUser.accounts as UserAccount[])?.find((acc: UserAccount) => acc.account_type === data.account_type) ||
+      (normalizedUser.accounts as UserAccount[])?.[0]
     if (defaultAccount) {
-      localStorage.setItem("active_account_id", (defaultAccount.id as number).toString())
+      localStorage.setItem("active_account_id", defaultAccount.id.toString())
     }
+  }
+
+  return response
+}
+
+export const adminLogin = async (data: { username: string; password: string }) => {
+  const response = await apiRequest<{
+    access: string
+    refresh: string
+    user: UserSession
+  }>("/accounts/admin/login/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+  if (response.data) {
+    localStorage.setItem("access_token", response.data.access)
+    localStorage.setItem("refresh_token", response.data.refresh)
+    localStorage.setItem(ADMIN_KEY, "true")
+    const normalizedUser: UserSession = {
+      ...response.data.user,
+    }
+    localStorage.setItem("user_session", JSON.stringify(normalizedUser))
   }
 
   return response
@@ -292,20 +474,17 @@ export const createAdditionalAccount = (data: { account_type: string }) =>
 export const getAccount = () => apiRequest("/accounts/account/")
 
 export const switchAccount = async (data: { account_id: number }) => {
-  const response = await apiRequest<{ user: Record<string, unknown>; account: Record<string, unknown> }>(
-    "/accounts/wallet/switch/",
-    {
-      method: "POST",
-      body: JSON.stringify(data),
-    },
-  )
+  const response = await apiRequest<{ user: UserSession; account: UserAccount }>("/accounts/wallet/switch/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
 
   if (response.data) {
     const { user, account } = response.data
     if (user && account) {
-      const normalizedUser = {
+      const normalizedUser: UserSession = {
         ...user,
-        accounts: (user.accounts as Array<Record<string, unknown>>).map((acc) => ({
+        accounts: ((user.accounts || []) as UserAccount[]).map((acc: UserAccount) => ({
           ...acc,
           balance: Number(acc.balance) || 0,
         })),
@@ -321,61 +500,50 @@ export const switchAccount = async (data: { account_id: number }) => {
   return response
 }
 
+/* ------------------------------------------------------------------ */
+/*  TRADING & WALLET                                                  */
+/* ------------------------------------------------------------------ */
 export const getMarkets = () => apiRequest("/trading/markets/")
-
 export const getTradeTypes = () => apiRequest("/trading/trade-types/")
-
 export const getAssets = () => apiRequest("/trading/assets/")
-
 export const placeTrade = (data: Record<string, unknown>) =>
   apiRequest("/trading/trades/place/", { method: "POST", body: JSON.stringify(data) })
-
 export const getTradeHistory = () => apiRequest("/trading/trades/history/")
-
 export const cancelTrade = (tradeId: number) => apiRequest(`/trading/trades/${tradeId}/cancel/`, { method: "POST" })
-
 export const getPriceHistory = (data: { symbol: string; timeframe: string }) =>
   apiRequest("/trading/price-history/", { method: "POST", body: JSON.stringify(data) })
 
 export const getRobots = () => apiRequest("/trading/robots/")
-
 export const getUserRobots = () => apiRequest("/trading/user-robots/")
-
 export const purchaseRobot = (robotId: number) => apiRequest(`/trading/purchase/${robotId}/`, { method: "POST" })
-
 export const resetDemoBalance = () => apiRequest("/accounts/demo/reset/", { method: "POST" })
 
 export const getBots = () => apiRequest("/bots/")
-
 export const createBot = (data: Record<string, unknown>) =>
   apiRequest("/bots/", { method: "POST", body: JSON.stringify(data) })
-
 export const toggleBot = (botId: number) => apiRequest(`/bots/${botId}/toggle/`, { method: "POST" })
 
 export const getSubscription = () => apiRequest("/bots/subscription/")
-
 export const subscribe = () => apiRequest("/bots/subscription/", { method: "POST" })
 
 export const getDashboard = async () => {
-  const response = await apiRequest<{ user?: Record<string, unknown> }>("/dashboard/")
-  if (response.data) {
-    const { user } = response.data
-    if (user && (user.accounts as Array<Record<string, unknown>>) && Array.isArray(user.accounts)) {
-      const normalizedUser = {
-        ...user,
-        accounts: ((user.accounts as Array<Record<string, unknown>>) || []).map((acc) => ({
-          ...acc,
-          balance: Number(acc.balance) || 0,
-        })),
-      }
-      localStorage.setItem("user_session", JSON.stringify(normalizedUser))
-      const defaultAccount =
-        (normalizedUser.accounts as Array<Record<string, unknown>>).find(
-          (acc) => acc.account_type === localStorage.getItem("account_type"),
-        ) || (normalizedUser.accounts as Array<Record<string, unknown>>)[0]
-      if (defaultAccount) {
-        localStorage.setItem("active_account_id", (defaultAccount.id as number).toString())
-      }
+  const response = await apiRequest<{ user?: UserSession }>("/dashboard/")
+  if (response.data?.user) {
+    const user = response.data.user
+    const normalizedUser: UserSession = {
+      ...user,
+      accounts: ((user.accounts || []) as UserAccount[]).map((acc: UserAccount) => ({
+        ...acc,
+        balance: Number(acc.balance) || 0,
+      })),
+    }
+    localStorage.setItem("user_session", JSON.stringify(normalizedUser))
+    const defaultAccount =
+      (normalizedUser.accounts as UserAccount[])?.find(
+        (acc: UserAccount) => acc.account_type === localStorage.getItem("account_type"),
+      ) || (normalizedUser.accounts as UserAccount[])?.[0]
+    if (defaultAccount) {
+      localStorage.setItem("active_account_id", defaultAccount.id.toString())
     }
   }
   return response
@@ -383,7 +551,7 @@ export const getDashboard = async () => {
 
 export const getWallets = async () => {
   const response = await apiRequest<{ wallets: Wallet[] }>("/wallet/wallets/")
-  if (response.data && response.data.wallets) {
+  if (response.data?.wallets) {
     response.data.wallets = response.data.wallets.map((wallet: Wallet) => ({
       ...wallet,
       balance: Number(wallet.balance) || 0,
@@ -391,9 +559,6 @@ export const getWallets = async () => {
   }
   return response
 }
-
-export const getForexCurrentPrices = (pairIds: number[]) =>
-  apiRequest(`/forex/current-prices/?ids=${pairIds.join(",")}`)
 
 export const getWalletTransactions = () => apiRequest<{ transactions: WalletTransaction[] }>("/wallet/transactions/")
 
@@ -412,17 +577,18 @@ export const verifyWithdrawal = (data: { code: string; transaction_id: number })
   apiRequest("/wallet/withdraw/verify/", { method: "POST", body: JSON.stringify(data) })
 
 export const getMpesaNumber = () => apiRequest<MpesaNumberResponse>("/wallet/mpesa-number/")
-
 export const setMpesaNumber = (data: { phone_number: string }) =>
   apiRequest("/wallet/mpesa-number/", { method: "POST", body: JSON.stringify(data) })
 
 export const resendOTP = (transactionId: string) =>
   apiRequest("/wallet/resend-otp/", { method: "POST", body: JSON.stringify({ transaction_id: transactionId }) })
 
-// Forex Trading API
-// Forex Trading API
+/* ------------------------------------------------------------------ */
+/*  FOREX TRADING                                                     */
+/* ------------------------------------------------------------------ */
 export const getForexPairs = () => apiRequest<{ pairs: ForexPair[] }>("/forex/pairs/")
-
+export const getForexCurrentPrices = (pairIds: number[]) =>
+  apiRequest(`/forex/current-prices/?ids=${pairIds.join(",")}`)
 export const getForexCurrentPrice = (pairId: number) =>
   apiRequest<{ current_price: number }>(`/forex/current-price/${pairId}/`)
 
@@ -435,42 +601,157 @@ export const placeForexOrder = (data: {
 }) => apiRequest<{ position: Position }>("/forex/orders/place/", { method: "POST", body: JSON.stringify(data) })
 
 export const getForexPositions = () => apiRequest<{ positions: Position[] }>("/forex/positions/")
-
 export const closeForexPosition = (positionId: number) =>
   apiRequest<{ message: string }>(`/forex/positions/${positionId}/close/`, { method: "POST" })
-
 export const closeAllPositions = () =>
   apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" })
-
 export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
 
 export const getForexRobots = () => apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
-
-export const getMyForexRobots = () =>
-  apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
-
+export const getMyForexRobots = () => apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
 export const purchaseForexRobot = (robotId: number) =>
   apiRequest<{ user_robot: UserRobot }>(`/forex/robots/${robotId}/purchase/`, { method: "POST" })
 
 export const toggleForexRobot = (
   userRobotId: number,
-  config?: { stake?: number; pair_id?: number; timeframe?: string }
+  config?: { stake?: number; pair_id?: number; timeframe?: string },
 ) =>
   apiRequest<{ is_running: boolean; message?: string }>(
     `/forex/robots/${userRobotId}/toggle/`,
-    config
-      ? { method: "POST", body: JSON.stringify(config) }
-      : { method: "POST" }
-  );
+    config ? { method: "POST", body: JSON.stringify(config) } : { method: "POST" },
+  )
 
 export const getForexBotLogs = () => apiRequest<{ bot_logs: BotLog[] }>("/forex/robot-logs/")
-
 export const getForexBotLogsByRobot = (userRobotId: number) =>
   apiRequest<{ bot_logs: BotLog[] }>(`/forex/robot-logs/?user_robot_id=${userRobotId}`)
 
+/* ------------------------------------------------------------------ */
+/*  AGENTS                                                            */
+/* ------------------------------------------------------------------ */
+export const getAgents = () => apiRequest<{ agents: Agent[] }>("/agents/list/")
+export const getAgentById = (agentId: number) => apiRequest<{ agent: Agent }>(`/agents/${agentId}/`)
+
+export const createAgentDeposit = async (data: {
+  agent_id: number
+  account: number
+  amount_kes: number
+  transaction_code: string
+  screenshot?: File
+  method: string
+}) => {
+  const fd = new FormData()
+  fd.append("agent", data.agent_id.toString())
+  fd.append("account", data.account.toString())
+  fd.append("amount_kes", data.amount_kes.toString())
+
+  const method = data.method.toLowerCase()
+
+  if (method === "mpesa") {
+    fd.append("transaction_code", data.transaction_code)
+    if (!data.screenshot) return { error: "Screenshot required for M-Pesa" } as ApiResponse<AgentDeposit>
+    fd.append("screenshot", data.screenshot)
+  } else if (method === "paypal") {
+    fd.append("paypal_transaction_id", data.transaction_code)
+  } else if (method === "bank_transfer") {
+    fd.append("bank_reference", data.transaction_code)
+    if (!data.screenshot) return { error: "Screenshot required for Bank Transfer" } as ApiResponse<AgentDeposit>
+    fd.append("screenshot", data.screenshot)
+  }
+
+  return apiRequestWithFile<AgentDeposit>("/agents/deposit/", fd)
+}
+
+export const verifyAgentDeposit = (data: { deposit_id: number; action: string }) =>
+  apiRequest("/agents/deposit/verify/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+export const requestAgentWithdrawal = (data: {
+  agent: number
+  account: number
+  amount_usd: number
+  phone_number?: string // Optional for M-Pesa
+  user_paypal_email?: string // For PayPal
+  user_bank_name?: string // For bank
+  user_bank_account_name?: string
+  user_bank_account_number?: string
+  user_bank_swift?: string
+}) =>
+  apiRequest<{ id: number }>("/agents/withdraw/request/", {
+    method: "POST",
+    body: JSON.stringify({
+      agent: data.agent,
+      account: data.account,
+      amount_usd: data.amount_usd,
+      // Conditionally include fields to avoid sending unexpected ones
+      ...(data.phone_number && { phone_number: data.phone_number }),
+      ...(data.user_paypal_email && { user_paypal_email: data.user_paypal_email }),
+      ...(data.user_bank_name && { user_bank_name: data.user_bank_name }),
+      ...(data.user_bank_account_name && { user_bank_account_name: data.user_bank_account_name }),
+      ...(data.user_bank_account_number && { user_bank_account_number: data.user_bank_account_number }),
+      ...(data.user_bank_swift && { user_bank_swift: data.user_bank_swift }),
+    }),
+  })
+
+export const verifyAgentWithdrawal = (data: {
+  withdrawal_id: number
+  otp: string
+}) =>
+  apiRequest<{ message: string }>("/agents/withdraw/verify/", {
+    method: "POST",
+    body: JSON.stringify({
+      withdrawal_id: data.withdrawal_id,
+      otp: data.otp,
+    }),
+  })
+
+export const resendAgentOTP = (transactionId: number) =>
+  apiRequest<{ message: string }>("/withdrawals/resend-otp/", {
+    method: "POST",
+    body: JSON.stringify({ transaction_id: transactionId }),
+  })
+
+export const getAgentDeposits = () => apiRequest<{ deposits: AgentDeposit[] }>("/deposits/my-deposits/")
+export const getAgentWithdrawals = () => apiRequest<{ withdrawals: AgentWithdrawal[] }>("/withdrawals/my-withdrawals/")
+
+export const getChatThread = () => apiRequest<ChatThread>("/customercare/chat/")
+
+export const sendChatMessage = (content: string) =>
+  apiRequest<ChatMessage>("/customercare/chat/", {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  })
+
+export const markMessagesAsRead = () => apiRequest("/customercare/chat/mark-read/", { method: "POST" })
+
+export const requestReview = () => apiRequest("/customercare/chat/review/", { method: "POST" })
+
+export const getActiveThreads = () => apiRequest<{ threads: ChatThread[] }>("/customercare/admin/threads/")
+
+export const getAdminChat = (userId: number) => apiRequest<ChatThread>(`/customercare/admin/chat/${userId}/`)
+
+export const sendAdminMessage = (userId: number, content: string) =>
+  apiRequest<ChatMessage>(`/customercare/admin/chat/${userId}/`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  })
+
+export const adminBlockUser = (userId: number, action: "temp" | "perm" | "unblock", reason?: string) =>
+  apiRequest(`/customercare/admin/block/${userId}/`, {
+    method: "POST",
+    body: JSON.stringify({ action, reason }),
+  })
+
+export const getUser = () => apiRequest<{ id: number; is_staff: boolean }>("/accounts/account/")
+
+/* ------------------------------------------------------------------ */
+/*  EXPORT API OBJECT                                                 */
+/* ------------------------------------------------------------------ */
 export const api = {
   signup,
   login,
+  adminLogin,
   getAccount,
   createAccount: createAdditionalAccount,
   switchAccount,
@@ -505,13 +786,26 @@ export const api = {
   placeForexOrder,
   getForexPositions,
   closeForexPosition,
-  getForexHistory,
   closeAllPositions,
+  getForexHistory,
   getForexRobots,
   getMyForexRobots,
   purchaseForexRobot,
   toggleForexRobot,
   getForexBotLogs,
   getForexBotLogsByRobot,
-
+  getAgents,
+  getAgentById,
+  createAgentDeposit,
+  verifyAgentDeposit,
+  requestAgentWithdrawal,
+  verifyAgentWithdrawal,
+  resendAgentOTP,
+  getAgentDeposits,
+  getAgentWithdrawals,
+  getChatThread,
+  sendChatMessage,
+  markMessagesAsRead,
+  requestReview,
+  getActiveThreads,
 }

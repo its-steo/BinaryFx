@@ -13,8 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = 'django-insecure-u#@omyh#sp*#u=^4lbv+vt*yn=&ykf*lm(sg^#9kv4ln$-=gdo'
 DEBUG = True
-#ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'binaryfx-delta.vercel.app', 'binaryfx.onrender.com']
-ALLOWED_HOSTS = ['binaryfx-delta.vercel.app', 'binaryfx.onrender.com', ]
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'binaryfx-delta.vercel.app', 'binaryfx.onrender.com']
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = False
@@ -27,6 +26,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -41,6 +41,10 @@ INSTALLED_APPS = [
     'dashboard',
     'wallet',
     'forex',
+    'agents',
+    'customercare',
+    'channels',
+    
 ]
 
 MIDDLEWARE = [
@@ -87,6 +91,7 @@ AUTHENTICATION_BACKENDS = [
 #    }
 #}
 
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -117,6 +122,13 @@ REST_FRAMEWORK = {
     ],
 }
 
+
+# OpenAI Config
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')  
+OPENAI_MODEL = 'gpt-3.5-turbo'
+
+# Frontend URL for signals/emails
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 
 # Email configuration
@@ -157,6 +169,7 @@ else:
 
 # Optional: Ensure media URLs point to S3
 MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
 
 
 

@@ -11,4 +11,5 @@ export interface Account {
 interface SidebarProps {
   loginType: string;
   activeAccount: Account | null;
+  
 }

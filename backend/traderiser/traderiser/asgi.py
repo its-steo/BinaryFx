@@ -7,19 +7,27 @@ For more information on this file, see
 https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 """
 
+# traderiser/asgi.py
 import os
 from django.core.asgi import get_asgi_application
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-import trading.routing
 
+# 1. SET SETTINGS MODULE
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'traderiser.settings')
 
+# 2. LOAD ASGI APP → THIS INITIALIZES DJANGO APPS
+application = get_asgi_application()
+
+# 3. NOW SAFE TO IMPORT ANYTHING
+from channels.routing import ProtocolTypeRouter, URLRouter
+from customercare.middleware import QueryStringJWTAuthMiddleware
+import customercare.routing
+
+# 4. FINAL ASGI ROUTER
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
-    "websocket": AuthMiddlewareStack(
+    "websocket": QueryStringJWTAuthMiddleware(
         URLRouter(
-            trading.routing.websocket_urlpatterns
+            customercare.routing.websocket_urlpatterns
         )
     ),
 })

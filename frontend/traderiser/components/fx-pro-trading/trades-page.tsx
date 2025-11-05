@@ -1,7 +1,7 @@
 // components/fx-pro-trading/trades-page.tsx
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ interface Position {
   volume_lots: number;
   entry_price: number;
   time_frame: string;
-  account: number | { balance: number }; // Can be number or object
+  account: number | { balance: number };
 }
 
 export default function TradesPage() {
@@ -33,54 +33,84 @@ export default function TradesPage() {
   const [closingId, setClosingId] = useState<number | null>(null);
   const [closingAll, setClosingAll] = useState(false);
   const [animatedPL, setAnimatedPL] = useState<{ [key: number]: number }>({});
+  const warnedMarginCall = useRef<Set<number>>(new Set());
 
   const calculateFloatingPL = (position: Position, currentPrice: number) => {
-    const pipValue = 0.0001; // Standard pip value for forex
+    const pipValue = 0.0001;
     const pipDelta = position.direction === 'buy'
       ? (currentPrice - position.entry_price) / pipValue
       : (position.entry_price - currentPrice) / pipValue;
-    const profit = pipDelta * position.volume_lots * position.pair.contract_size * pipValue - 
+    const profit = pipDelta * position.volume_lots * position.pair.contract_size * pipValue -
                    (position.pair.spread * position.volume_lots * position.pair.contract_size * pipValue);
-    return profit; // Return profit in account currency (USD)
+    return profit;
   };
 
-  // Total floating P&L
   const totalFloatingPL = positions.reduce((sum, position) => {
     const currentPrice = prices[position.pair.id] || position.entry_price;
     const pl = calculateFloatingPL(position, currentPrice);
     return sum + (isNaN(pl) ? 0 : pl);
   }, 0);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Smooth animation using requestAnimationFrame
   useEffect(() => {
-    const animationFrames: NodeJS.Timeout[] = [];
-    positions.forEach((position: Position) => {
+    const frameIds: number[] = [];
+    const targetPL = new Map<number, number>();
+    const currentPL = new Map<number, number>();
+
+    positions.forEach((position) => {
       const currentPrice = prices[position.pair.id] || position.entry_price;
       const newPL = calculateFloatingPL(position, currentPrice);
-      const startPL = animatedPL[position.id] ?? newPL;
-      let progress = 0;
+      targetPL.set(position.id, newPL);
+      currentPL.set(position.id, animatedPL[position.id] ?? newPL);
+    });
 
-      const animate = () => {
-        progress += 0.1;
-        const eased = easeInOutQuad(progress);
-        const nextPL = startPL + (newPL - startPL) * eased;
-        setAnimatedPL(prev => ({ ...prev, [position.id]: nextPL }));
-        if (progress < 1) {
-          animationFrames.push(setTimeout(animate, 16));
+    const animate = () => {
+      let hasChanges = false;
+      const updated: [number, number][] = [];
+
+      positions.forEach((position) => {
+        const start = currentPL.get(position.id)!;
+        const end = targetPL.get(position.id)!;
+        const diff = end - start;
+
+        if (Math.abs(diff) > 0.01) {
+          const next = start + diff * 0.12; // Smooth easing
+          currentPL.set(position.id, next);
+          updated.push([position.id, next]);
+          hasChanges = true;
         }
-      };
-      animate();
+      });
 
+      if (hasChanges) {
+        setAnimatedPL(Object.fromEntries(updated));
+        frameIds.push(requestAnimationFrame(animate));
+      }
+    };
+
+    frameIds.push(requestAnimationFrame(animate));
+
+    return () => frameIds.forEach(cancelAnimationFrame);
+  }, [positions, prices, isSashi]); // No animatedPL in deps
+
+  // Margin call warning (once per position)
+  useEffect(() => {
+    positions.forEach((position) => {
+      const currentPrice = prices[position.pair.id] || position.entry_price;
+      const newPL = calculateFloatingPL(position, currentPrice);
       const accountBalance = typeof position.account === 'number'
         ? position.account
         : (position.account as { balance: number }).balance ?? 0;
 
       if (!isSashi && newPL <= 0 && Math.abs(newPL) >= accountBalance) {
-        toast.warning(`Margin Call: ${position.pair.name}`);
+        if (!warnedMarginCall.current.has(position.id)) {
+          toast.warning(`Margin Call: ${position.pair.name}`);
+          warnedMarginCall.current.add(position.id);
+        }
+      } else {
+        warnedMarginCall.current.delete(position.id);
       }
     });
-    return () => animationFrames.forEach(clearTimeout);
-  }, [positions, prices, isSashi, animatedPL]);
+  }, [positions, prices, isSashi]);
 
   const handleClosePosition = async (positionId: number) => {
     try {
@@ -90,18 +120,13 @@ export default function TradesPage() {
 
       const currentPrice = prices[position.pair.id] || position.entry_price;
       const realizedPL = calculateFloatingPL(position, currentPrice);
-      console.log(`Closing ${position.pair.name}: Entry ${position.entry_price}, Close ${currentPrice}, Realized P&L ${realizedPL}`);
 
       await api.closeForexPosition(positionId);
       mutatePositions();
       mutate("/wallet/wallets/");
       toast.success(`Position closed with P&L $${realizedPL.toFixed(2)}`);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        toast.error(err.message || "Failed to close");
-      } else {
-        toast.error("Failed to close");
-      }
+      toast.error(err instanceof Error ? err.message : "Failed to close");
     } finally {
       setClosingId(null);
     }
@@ -115,11 +140,7 @@ export default function TradesPage() {
       mutate("/wallet/wallets/");
       toast.success("All positions closed!");
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        toast.error(err.message || "Failed to close all");
-      } else {
-        toast.error("Failed to close all");
-      }
+      toast.error(err instanceof Error ? err.message : "Failed to close all");
     } finally {
       setClosingAll(false);
     }
@@ -165,7 +186,7 @@ export default function TradesPage() {
               {closingAll ? "Closing All..." : "Close All Positions"}
             </Button>
 
-            {positions.map((position: Position) => {
+            {positions.map((position) => {
               const currentPrice = prices[position.pair.id] || position.entry_price;
               const pl = animatedPL[position.id] ?? calculateFloatingPL(position, currentPrice);
               const color = pl >= 0 ? "text-green-500" : "text-red-500";
@@ -183,7 +204,7 @@ export default function TradesPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <p className={`font-bold text-lg ${color} animate-pulse`}>
+                      <p className={`font-bold text-lg ${color}`}>
                         ${pl.toFixed(2)}
                       </p>
                       <Button
@@ -205,8 +226,4 @@ export default function TradesPage() {
       </div>
     </div>
   );
-}
-
-function easeInOutQuad(t: number): number {
-  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 }
