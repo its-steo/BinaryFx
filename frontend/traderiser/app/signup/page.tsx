@@ -174,7 +174,7 @@ export default function SignupPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Phone (Optional)</label>
+              <label className="text-sm font-medium text-white">Phone</label>
               <Input
                 type="tel"
                 name="phone"
