@@ -16,14 +16,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ====================== AGENT LIST ======================
 class AgentListView(APIView):
     def get(self, request):
         agents = Agent.objects.filter(is_active=True)
         serializer = AgentSerializer(agents, many=True, context={'request': request})
         return Response(serializer.data)
-    
-# ====================== DEPOSIT ======================
+
 class AgentDepositView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -36,7 +34,7 @@ class AgentDepositView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AgentDepositVerifyView(APIView):
-    permission_classes = [permissions.IsAuthenticated]  # Assuming admin/support
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         deposit_id = request.data.get("deposit_id")
@@ -72,15 +70,15 @@ class AgentDepositVerifyView(APIView):
                     description=f"Agent Deposit [{deposit.get_payment_method_display()}] - {deposit.agent.name}"
                 )
 
-                # Professional email with HTML
                 html_content = render_to_string('emails/deposit_verified.html', {
                     'method': deposit.get_payment_method_display(),
-                    'amount_kes': f"{deposit.amount_kes:,}",
+                    'amount_kes': f"{deposit.amount_kes:,.2f}",
                     'agent_name': deposit.agent.name,
-                    'amount_usd': f"{deposit.amount_usd:,}"
+                    'amount_usd': f"{deposit.amount_usd:,.2f}",
+                    'user_name': deposit.user.get_full_name() or deposit.user.username,
                 })
                 email = EmailMultiAlternatives(
-                    "Deposit Verified! ✅",
+                    "Deposit Verified!",
                     "Your deposit has been confirmed.",
                     settings.DEFAULT_FROM_EMAIL,
                     [deposit.user.email]
@@ -91,17 +89,16 @@ class AgentDepositVerifyView(APIView):
                 logger.info(f"Deposit {deposit.id} verified for {deposit.user.username}")
                 return Response({"message": "Deposit verified & wallet credited"}, status=200)
 
-            else:  # reject
+            else:
                 deposit.status = 'rejected'
                 deposit.save()
 
-                # Professional email
                 html_content = render_to_string('emails/deposit_rejected.html', {
-                    'amount_kes': f"{deposit.amount_kes:,}",
-                    'agent_name': deposit.agent.name
+                    'amount_kes': f"{deposit.amount_kes:,.2f}",
+                    'agent_name': deposit.agent.name,
                 })
                 email = EmailMultiAlternatives(
-                    "Deposit Rejected ❌",
+                    "Deposit Rejected",
                     "Your deposit was rejected.",
                     settings.DEFAULT_FROM_EMAIL,
                     [deposit.user.email]
@@ -112,14 +109,13 @@ class AgentDepositVerifyView(APIView):
                 logger.info(f"Deposit {deposit.id} rejected for {deposit.user.username}")
                 return Response({"message": "Deposit rejected"}, status=200)
 
-# ====================== WITHDRAWAL ======================
 class AgentWithdrawalRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         serializer = AgentWithdrawalSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            withdrawal = serializer.save()  # ← FIXED: Remove (user=request.user) here
+            withdrawal = serializer.save()
             logger.info(f"Withdrawal created: {withdrawal.id} for {request.user.username}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -163,16 +159,15 @@ class AgentWithdrawalVerifyView(APIView):
                     description=f"Withdrawal via {withdrawal.agent.name} ({withdrawal.get_payment_method_display()}) – Awaiting payment"
                 )
 
-            # Email with user details
             html_content = render_to_string('emails/withdrawal_locked.html', {
-                'amount_usd': f"{withdrawal.amount_usd:,}",
+                'amount_usd': f"{withdrawal.amount_usd:,.2f}",
                 'agent_name': withdrawal.agent.name,
-                'amount_kes': f"{withdrawal.amount_kes:,}",
+                'amount_kes': f"{withdrawal.amount_kes:,.2f}",
                 'method': withdrawal.get_payment_method_display(),
                 'user_details': self._get_user_details(withdrawal)
             })
             email = EmailMultiAlternatives(
-                "Withdrawal Locked! 🔒",
+                "Withdrawal Locked!",
                 "Funds deducted; awaiting agent transfer.",
                 settings.DEFAULT_FROM_EMAIL,
                 [withdrawal.user.email]
@@ -223,16 +218,15 @@ class AgentWithdrawalAdminActionView(APIView):
             withdrawal.completed_at = timezone.now()
             withdrawal.save()
 
-            # Email with details
             html_content = render_to_string('emails/withdrawal_sent.html', {
-                'amount_usd': f"{withdrawal.amount_usd:,}",
-                'amount_kes': f"{withdrawal.amount_kes:,}",
+                'amount_usd': f"{withdrawal.amount_usd:,.2f}",
+                'amount_kes': f"{withdrawal.amount_kes:,.2f}",
                 'method': method,
                 'agent_name': withdrawal.agent.name,
-                'user_details': self._get_user_details(withdrawal)  # Reuse method
+                'user_details': self._get_user_details(withdrawal)
             })
             email = EmailMultiAlternatives(
-                "Withdrawal Sent! 🎉",
+                "Withdrawal Sent!",
                 "Your funds have been transferred.",
                 settings.DEFAULT_FROM_EMAIL,
                 [withdrawal.user.email]
@@ -243,7 +237,7 @@ class AgentWithdrawalAdminActionView(APIView):
             logger.info(f"Withdrawal {withdrawal.id} completed for {withdrawal.user.username}")
             return Response({"message": f"Withdrawal completed – {method} sent"})
 
-        else:  # reject
+        else:
             with transaction.atomic():
                 withdrawal.status = 'rejected'
                 withdrawal.save()
@@ -263,9 +257,8 @@ class AgentWithdrawalAdminActionView(APIView):
                     description=f"Rejected withdrawal via {withdrawal.agent.name}"
                 )
 
-                # Email
                 html_content = render_to_string('emails/withdrawal_rejected.html', {
-                    'amount_usd': f"{withdrawal.amount_usd:,}"
+                    'amount_usd': f"{withdrawal.amount_usd:,.2f}"
                 })
                 email = EmailMultiAlternatives(
                     "Withdrawal Rejected & Refunded",

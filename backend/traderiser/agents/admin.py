@@ -122,10 +122,10 @@ class AgentDepositAdmin(admin.ModelAdmin):
                         )
                     )
 
-                    # === Send email – PASS RAW VALUES ===
+                    # === Send email – PASS FORMATTED STRINGS ===
                     html_content = render_to_string('emails/deposit_verified.html', {
-                        'amount_kes': deposit.amount_kes,           # ← RAW
-                        'amount_usd': deposit.amount_usd,           # ← RAW
+                        'amount_kes': f"{deposit.amount_kes:,.2f}",
+                        'amount_usd': f"{deposit.amount_usd:,.2f}",
                         'agent_name': deposit.agent.name,
                         'user_name': deposit.user.get_full_name() or deposit.user.username,
                     })
@@ -142,14 +142,12 @@ class AgentDepositAdmin(admin.ModelAdmin):
                     logger.info(f"[SUCCESS] Deposit {deposit.id} verified and credited.")
 
                 except Exception as e:
-                    # === SANITIZE ERROR TO AVOID TEMPLATE FILTER CRASH ===
                     raw_error = str(e)
                     safe_error = raw_error.replace('{', '').replace('}', '').replace('|', ' ').replace(':', ' ')
                     error_msg = f"Deposit {deposit.id}: {safe_error}"
                     errors.append(error_msg)
                     logger.error(f"[ERROR] {error_msg}")
 
-        # === FINAL MESSAGES ===
         if updated:
             self.message_user(
                 request,
@@ -174,7 +172,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
                 deposit.save()
 
                 html_content = render_to_string('emails/deposit_rejected.html', {
-                    'amount_kes': deposit.amount_kes,
+                    'amount_kes': f"{deposit.amount_kes:,.2f}",
                     'agent_name': deposit.agent.name,
                 })
                 email = EmailMultiAlternatives(
@@ -240,8 +238,8 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                 w.save()
 
                 html_content = render_to_string('emails/withdrawal_sent.html', {
-                    'amount_usd': w.amount_usd,
-                    'amount_kes': w.amount_kes,
+                    'amount_usd': f"{w.amount_usd:,.2f}",
+                    'amount_kes': f"{w.amount_kes:,.2f}",
                     'method': w.get_payment_method_display(),
                     'agent_name': w.agent.name,
                 })

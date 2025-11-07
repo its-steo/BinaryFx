@@ -54,7 +54,7 @@
           </tr>
           <tr>
             <td>Exchange Rate</td>
-            <td>1 USD = {{ "%.2f"|format(1 / (amount_usd|float / amount_kes|float)) }} KES</td>
+            <td>1 USD = {{ amount_kes|floatformat:2 }} KES</td>
           </tr>
           <tr>
             <td>Status</td>
@@ -73,7 +73,7 @@
     </div>
 
     <div class="footer">
-      <p>&copy; 2025 Your Trading Platform. All rights reserved.</p>
+      <p>© 2025 Your Trading Platform. All rights reserved.</p>
       <p><a href="#" style="color:#888;text-decoration:none;">Unsubscribe</a> • <a href="#" style="color:#888;text-decoration:none;">Privacy Policy</a></p>
     </div>
   </div>
