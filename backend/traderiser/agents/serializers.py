@@ -8,12 +8,12 @@ from django.conf import settings
 
 
 class AgentSerializer(serializers.ModelSerializer):
-    profile_picture = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = AgentModel
         fields = [
-            'id', 'name', 'method', 'profile_picture', 'phone', 'email',
+            'id', 'name', 'method', 'image', 'phone', 'email',
             'mpesa_phone', 'paypal_email', 'paypal_link',
             'bank_name', 'bank_account_name', 'bank_account_number',
             'instructions', 'deposit_rate_kes_to_usd', 'withdrawal_rate_usd_to_kes',
@@ -21,9 +21,13 @@ class AgentSerializer(serializers.ModelSerializer):
             'response_time', 'verified'
         ]
 
-    def get_profile_picture(self, obj):
-        if obj.profile_picture:
-            return f"{settings.MEDIA_URL}{obj.profile_picture}"
+    def get_image(self, obj):
+        if obj.profile_picture:  # ← FIXED: was obj.image
+            # For S3: use .url (full public URL)
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
         return None
 
 
@@ -177,7 +181,7 @@ class AgentWithdrawalSerializer(serializers.ModelSerializer):
         # === MPESA (no extra fields needed) ===
         # Just pass through
 
-        # Amount check
+        # === Amount check
         if data['amount_usd'] < Decimal('10'):
             raise serializers.ValidationError({
                 "amount_usd": "Minimum withdrawal is $10"

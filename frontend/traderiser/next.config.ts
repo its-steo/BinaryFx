@@ -21,6 +21,24 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/assets/**', // Include region-specific hostname if used
       },
+      {
+        protocol: 'https',
+        hostname: 'grandview-storage.s3.amazonaws.com',
+        port: '',
+        pathname: '/agents/**', // Restrict to agents folder for security
+      },
+      {
+        protocol: 'https',
+        hostname: 'grandview-storage.s3.eu-north-1.amazonaws.com',
+        port: '',
+        pathname: '/agents/**', // Include region-specific hostname if used
+      },
+      {
+        protocol: 'https',
+        hostname: 'via.placeholder.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };

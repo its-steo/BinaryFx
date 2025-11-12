@@ -2,12 +2,20 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.decorators import api_view,permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import User, Account
 from .serializers import UserSerializer, AccountSerializer
 from django.conf import settings
 from django.db import transaction
+from django.core.cache import cache
+from django.utils.crypto import get_random_string
+from django.utils import timezone
+from datetime import timedelta
+from rest_framework.permissions import AllowAny
+from django.core.mail import send_mail
+import random
 
 
 class SignupView(APIView):
@@ -195,3 +203,94 @@ class SwitchWalletView(APIView):
             })
         except Account.DoesNotExist:
             return Response({'error': 'Account not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class VerifyEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        otp = request.data.get('otp')
+        cached = cache.get(f"otp_{email}")
+        if cached and cached['code'] == otp and cached['expires'] > timezone.now():
+            user = User.objects.get(email=email)
+            user.is_email_verified = True
+            user.save()
+            cache.delete(f"otp_{email}")
+            return Response({'success': True})
+        return Response({'error': 'Invalid or expired code'}, status=400)
+
+
+class ResendOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        code = get_random_string(length=6, allowed_chars='0123456789')
+        expires = timezone.now() + timedelta(minutes=1)
+        cache.set(f"otp_{email}", {'code': code, 'expires': expires}, timeout=60)
+
+        send_mail(
+            'Your TradeRiser OTP',
+            f'Your verification code is: {code}',
+            'no-reply@traderiser.com',
+            [email],
+            fail_silently=False,
+        )
+        return Response({'success': True})
+    
+# accounts/views.py
+@api_view(['POST'])
+@permission_classes([AllowAny])  # This is the fix
+def password_reset_request(request):
+    email = request.data.get('email')
+    if not email:
+        return Response({"error": "Email is required"}, status=400)
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        # Don't reveal if email exists
+        return Response({"message": "If the email exists, a reset code was sent."})
+
+    code = ''.join(random.choices('0123456789', k=4))
+    cache.set(f"pw_reset_{email}", code, timeout=300)
+
+    send_mail(
+        "Password Reset Code",
+        f"Your 4-digit reset code: {code}",
+        "no-reply@yourapp.com",
+        [email],
+        fail_silently=False,
+    )
+    return Response({"message": "Reset code sent"})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_verify(request):
+    email = request.data.get('email')
+    otp = request.data.get('otp')
+    cached = cache.get(f"pw_reset_{email}")
+    if cached != otp:
+        return Response({"error": "Invalid code"}, status=400)
+    return Response({"message": "Verified"})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request):
+    email = request.data.get('email')
+    otp = request.data.get('otp')
+    new_password = request.data.get('new_password')
+    confirm = request.data.get('confirm_password')
+
+    if new_password != confirm:
+        return Response({"error": "Passwords do not match"}, status=400)
+
+    cached = cache.get(f"pw_reset_{email}")
+    if cached != otp:
+        return Response({"error": "Invalid or expired code"}, status=400)
+
+    user = User.objects.get(email=email)
+    user.set_password(new_password)
+    user.save()
+    cache.delete(f"pw_reset_{email}")
+    return Response({"message": "Password reset successful"})

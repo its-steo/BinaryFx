@@ -33,13 +33,13 @@ services:
       - key: EMAIL_PORT
         value: 587
       - key: EMAIL_HOST_USER
-        value: grandviewshopafrica@gmail.com
+        value: traderiserpro@gmail.com
       - key: EMAIL_HOST_PASSWORD
         sync: false # Set in Render dashboard for security
       - key: DEFAULT_FROM_EMAIL
-        value: Grandview <grandviewshopafrica@gmail.com>
+        value: TradeRiser <traderiserpro@gmail.com>
       - key: ADMIN_EMAIL
-        value: grandviewshopafrica@gmail.com
+        value: traderiserpro@gmail.com
       - key: ALLOWED_HOSTS
         value: .onrender.com # Automatically includes Render's domain
       - key: CORS_ALLOWED_ORIGINS

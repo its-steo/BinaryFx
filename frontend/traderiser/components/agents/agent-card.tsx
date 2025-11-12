@@ -1,3 +1,4 @@
+// components/agents/agent-card.tsx
 "use client"
 
 import { Star, MapPin, Shield } from "lucide-react"
@@ -5,7 +6,7 @@ import Image from "next/image"
 import { useState } from "react"
 import DepositModal from "./deposit-modal"
 import WithdrawalModal from "./withdrawal-modal"
-import PaymentInfoDisplay from "./payment-info-display"
+import PaymentInfoDisplay from "./payment-info-display"  // NEW: Import to show full payment info
 
 interface AgentCardProps {
   agent: {
@@ -63,89 +64,64 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-purple-300 transition-all duration-300 flex flex-col h-full">
-      {/* Header with Agent Info */}
+      {/* NEW: Full-width Banner Image Covering Upper Part */}
+      <div className="relative w-full h-32 sm:h-40">
+        <Image
+          src={agent.image || "/placeholder-agent.jpg"}
+          alt={agent.name}
+          className="object-cover"
+          fill
+          priority
+        />
+      </div>
+
+      {/* Header with Agent Info (below banner) */}
       <div className="p-4 sm:p-6 border-b border-slate-200">
         <div className="flex items-start justify-between gap-3 sm:gap-4">
-          <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-            {/* Agent Image */}
-            <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
-              <Image
-                src={agent.image || "/placeholder-agent.jpg"}
-                alt={agent.name}
-                className="w-full h-full object-cover rounded-lg"
-                fill
-              />
-            </div>
+          <div className="flex-1 min-w-0 space-y-1">
+            {/* Agent Name */}
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 truncate">{agent.name}</h3>
 
-            {/* Agent Details */}
-            <div className="flex-1 min-w-0 space-y-1">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 truncate">{agent.name}</h3>
-              </div>
+            {/* Method Badge */}
+            <span
+              className={`inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium ${badge.color} ${badge.bgColor}`}
+            >
+              {badge.label}
+            </span>
 
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-slate-600">
-                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="truncate">{agent.location}</span>
-              </div>
-
-              <div className="flex items-center gap-1 sm:gap-1.5">
-                <div className="flex items-center gap-0.5 sm:gap-1">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`w-3 h-3 sm:w-4 sm:h-4 ${
-                        i < Math.floor(agent.rating) ? "text-yellow-400 fill-yellow-400" : "text-slate-200"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <span className="text-xs sm:text-sm text-slate-600 ml-1">
-                  {agent.rating.toFixed(1)} ({agent.reviews})
-                </span>
-              </div>
+            {/* Location */}
+            <div className="flex items-center gap-1 sm:gap-2 text-slate-600">
+              <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm font-medium">{agent.location}</span>
             </div>
           </div>
 
-          {/* Method Badge */}
-          <div
-            className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${badge.color} ${badge.bgColor} whitespace-nowrap`}
-          >
-            {badge.label}
+          {/* Rating */}
+          <div className="flex items-center gap-1 text-yellow-500 flex-shrink-0">
+            <Star className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+            <span className="text-sm sm:text-base font-bold">{agent.rating.toFixed(1)}</span>
+            <span className="text-xs sm:text-sm text-slate-500">({agent.reviews})</span>
           </div>
         </div>
       </div>
 
-      {/* Rates */}
-      <div className="grid grid-cols-2 divide-x divide-slate-200 border-b border-slate-200">
-        {/* Deposit Rate */}
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-3 sm:p-4 rounded-xl">
-          <p className="text-xs text-slate-600 mb-1 sm:mb-2">Deposit Rate</p>
-          <p className="font-bold text-lg sm:text-xl text-purple-600">
-            {Number(agent.deposit_rate_kes_to_usd).toFixed(2)}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">KES/USD</p>
+      {/* Rates Section */}
+      <div className="grid grid-cols-2 border-b border-slate-200">
+        <div className="p-4 sm:p-6 border-r border-slate-200">
+          <p className="text-xs text-slate-600 mb-1 sm:mb-2 font-semibold">Deposit Rate</p>
+          <p className="text-sm sm:text-base font-bold text-slate-900">1 USD = {agent.deposit_rate_kes_to_usd} KES</p>
         </div>
-        {/* Withdrawal Rate */}
-        <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-3 sm:p-4 rounded-xl">
-          <p className="text-xs text-slate-600 mb-1 sm:mb-2">Withdrawal Rate</p>
-          <p className="font-bold text-lg sm:text-xl text-slate-700">
-            {Number(agent.withdrawal_rate_usd_to_kes).toFixed(2)}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">KES/USD</p>
+        <div className="p-4 sm:p-6">
+          <p className="text-xs text-slate-600 mb-1 sm:mb-2 font-semibold">Withdrawal Rate</p>
+          <p className="text-sm sm:text-base font-bold text-slate-900">1 USD = {agent.withdrawal_rate_usd_to_kes} KES</p>
         </div>
-      </div>
-
-      <div className="p-4 sm:p-6 border-b border-slate-200">
-        <PaymentInfoDisplay method={agent.method} agent={agent} />
       </div>
 
       {/* Verified Badge */}
       {agent.verified && (
-        <div className="px-4 sm:px-6 py-2 sm:py-3 bg-green-50 border-b border-slate-200">
-          <div className="flex items-center gap-1 sm:gap-2 text-green-700">
-            <Shield className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm font-medium">Verified Agent</span>
-          </div>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center gap-1 sm:gap-2 text-green-700">
+          <Shield className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span className="text-xs sm:text-sm font-medium">Verified Agent</span>
         </div>
       )}
 
@@ -168,12 +144,18 @@ export default function AgentCard({ agent }: AgentCardProps) {
         </div>
       )}
 
-      {/* Agent Instructions */}
+      {/* Agent Instructions (Full Description - No Clamping) */}
       {agent.instructions && (
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-blue-50">
-          <p className="text-xs text-blue-700 line-clamp-2">{agent.instructions}</p>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-blue-50 max-h-40 overflow-y-auto">
+          <p className="text-xs text-blue-700">{agent.instructions}</p>  {/* UPDATED: Removed line-clamp-2 */}
         </div>
       )}
+
+      {/* NEW: Full Payment Info Display */}
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
+        <p className="text-xs text-slate-600 mb-2 font-semibold">Payment Details</p>
+        <PaymentInfoDisplay method={agent.method} agent={agent} />
+      </div>
 
       {/* Action Buttons */}
       <div className="px-4 sm:px-6 py-4 mt-auto flex gap-2 sm:gap-3">

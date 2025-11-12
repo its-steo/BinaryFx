@@ -745,6 +745,42 @@ export const adminBlockUser = (userId: number, action: "temp" | "perm" | "unbloc
 
 export const getUser = () => apiRequest<{ id: number; is_staff: boolean }>("/accounts/account/")
 
+export const verifyEmailOtp = (data: { email: string; otp: string }) =>
+  apiRequest<{ message: string }>("/accounts/verify-email/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+export const resendEmailOtp = (email: string) =>
+  apiRequest<{ message: string }>("/accounts/resend-otp/", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  })
+
+  // --- PASSWORD RESET ---
+export const requestPasswordReset = (email: string) =>
+  apiRequest<{ message: string }>("/accounts/password-reset/", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  })
+
+export const verifyPasswordResetOtp = (data: { email: string; otp: string }) =>
+  apiRequest<{ message: string }>("/accounts/password-reset/verify/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+export const confirmPasswordReset = (data: {
+  email: string
+  otp: string
+  new_password: string
+  confirm_password: string
+}) =>
+  apiRequest<{ message: string }>("/accounts/password-reset/confirm/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
 /* ------------------------------------------------------------------ */
 /*  EXPORT API OBJECT                                                 */
 /* ------------------------------------------------------------------ */
@@ -808,4 +844,9 @@ export const api = {
   markMessagesAsRead,
   requestReview,
   getActiveThreads,
+  verifyEmailOtp,
+  resendEmailOtp,
+  requestPasswordReset,
+  verifyPasswordResetOtp,
+  confirmPasswordReset,
 }

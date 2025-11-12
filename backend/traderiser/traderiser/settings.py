@@ -7,6 +7,7 @@ from storages.backends.s3boto3 import S3Boto3Storage
 from decouple import config
 
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -45,7 +46,9 @@ INSTALLED_APPS = [
     'forex',
     'agents',
     'customercare',
+    'management',
     'channels',
+
     
 ]
 
@@ -86,24 +89,26 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
 
 
 #DATABASES = {
 #    'default': {
-#        'ENGINE': 'django.db.backends.postgresql',
-#        'NAME': os.getenv('DB_NAME', 'binaryfx'),
-#        'USER': os.getenv('DB_USER', 'binaryfx_user'),
-#        'PASSWORD': os.getenv('DB_PASSWORD', 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk'),
-#        'HOST': os.getenv('DB_HOST', 'dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com'),
-#        'PORT': os.getenv('DB_PORT', '5432'),
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
 #    }
 #}
+
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'binaryfx'),
+        'USER': os.getenv('DB_USER', 'binaryfx_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk'),
+        'HOST': os.getenv('DB_HOST', 'dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com'),
+        'PORT': os.getenv('DB_PORT', '5432'),
+    }
+}
 
 ASGI_APPLICATION = 'traderiser.asgi.application'
 CHANNEL_LAYERS = {
@@ -137,11 +142,11 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
-EMAIL_HOST_USER = 'grandviewshopafrica@gmail.com'
-EMAIL_HOST_PASSWORD = 'jcsajscciezckcjr'  # App-specific password for Gmail
+EMAIL_HOST_USER = 'traderiserpro@gmail.com'
+EMAIL_HOST_PASSWORD = 'ixinhoofcsnzjkqb'  # App-specific password for Gmail
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = 'Grandview <grandviewshopafrica@gmail.com>'  # Must match EMAIL_HOST_USER or a verified alias
-ADMIN_EMAIL = 'grandviewshopafrica@gmail.com'  # Admin email for deposit notifications
+DEFAULT_FROM_EMAIL = 'TradeRiser <traderiserpro@gmail.com>'  # Must match EMAIL_HOST_USER or a verified alias
+ADMIN_EMAIL = 'traderiserpro@gmail.com'  # Admin email for deposit notifications
 
 # ──────────────────────────────────────────────────────────────
 #  S3 / Media – read from .env

@@ -38,6 +38,7 @@ interface Agent {
   response_time?: string
   verified: boolean
   image?: string
+  profile_picture?: string
   instructions?: string
 }
 
