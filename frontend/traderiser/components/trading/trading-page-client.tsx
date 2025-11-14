@@ -25,7 +25,11 @@ interface UserRobot {
   robot: {
     id: number
     name: string
+    /** true only for demo-available robots that were *not* purchased */
+    available_for_demo?: boolean
   }
+  /** null = demo-access, non-null = real purchase */
+  purchased_at: string | null
 }
 
 interface DashboardData {

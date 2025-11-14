@@ -62,26 +62,58 @@ export default function RobotTradingLogs({
   forceAutoScroll = false,
 }: RobotTradingLogsProps) {
   const logsContainerRef = useRef<HTMLDivElement>(null)
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
+  const [isNearTop, setIsNearTop] = useState(true)
+  const prevLogsLength = useRef(logs.length)
 
-  useEffect(() => {
-    if (forceAutoScroll) setShouldAutoScroll(true)
-  }, [forceAutoScroll])
-
+  // Reverse logs: newest at top, oldest at bottom
   const reversedLogs = [...logs].reverse()
 
+  /* --------------------------------------------------------------
+   *  AUTO-SCROLL: Always scroll to TOP (newest) when new log arrives
+   * -------------------------------------------------------------- */
   useEffect(() => {
-    if (shouldAutoScroll && logsContainerRef.current) {
-      logsContainerRef.current.scrollTop = 0
-    }
-  }, [reversedLogs, shouldAutoScroll])
+    const container = logsContainerRef.current
+    if (!container) return
 
-  const handleScroll = () => {
-    if (logsContainerRef.current && !forceAutoScroll) {
-      const { scrollTop } = logsContainerRef.current
-      setShouldAutoScroll(scrollTop < 50)
+    const shouldAutoScroll = forceAutoScroll || isNearTop
+
+    if (logs.length > prevLogsLength.current && shouldAutoScroll) {
+      container.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      })
     }
-  }
+
+    prevLogsLength.current = logs.length
+  }, [logs.length, isNearTop, forceAutoScroll])
+
+  /* --------------------------------------------------------------
+   *  TRACK IF USER IS NEAR TOP (within 100px)
+   * -------------------------------------------------------------- */
+  useEffect(() => {
+    const container = logsContainerRef.current
+    if (!container) return
+
+    const checkNearTop = () => {
+      const threshold = 100
+      const distanceFromTop = container.scrollTop
+      setIsNearTop(distanceFromTop <= threshold)
+    }
+
+    // Initial check
+    checkNearTop()
+
+    const handleScroll = () => {
+      if (forceAutoScroll) {
+        setIsNearTop(true)
+        return
+      }
+      checkNearTop()
+    }
+
+    container.addEventListener("scroll", handleScroll)
+    return () => container.removeEventListener("scroll", handleScroll)
+  }, [forceAutoScroll, logs])
 
   const getLogStyles = (level: BotLog["level"]) => {
     switch (level) {
@@ -108,7 +140,6 @@ export default function RobotTradingLogs({
 
   if (!isVisible) return null
 
-  // Detect mobile (client-side only)
   const isMobileView = typeof window !== "undefined" && window.innerWidth <= 640
 
   return isMobileView ? (
@@ -125,10 +156,7 @@ export default function RobotTradingLogs({
           <span className="text-sm font-semibold text-white">Trading Logs {isRunning ? "(Running)" : "(Paused)"}</span>
           <span className="text-xs text-white/60 ml-2">({logs.length} events)</span>
         </div>
-        <button
-          onClick={onClose}
-          className="text-white/60 hover:text-white transition-colors"
-        >
+        <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -150,7 +178,6 @@ export default function RobotTradingLogs({
 
       <div
         ref={logsContainerRef}
-        onScroll={handleScroll}
         className="max-h-96 overflow-y-auto px-3 sm:px-4 py-3 space-y-2 font-mono text-xs"
       >
         {logs.length === 0 ? (
@@ -165,9 +192,9 @@ export default function RobotTradingLogs({
             {reversedLogs.map((log) => (
               <motion.div
                 key={log.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
                 className={cn("px-3 py-2 rounded border border-white/10", getLogStyles(log.level))}
               >
@@ -199,7 +226,7 @@ export default function RobotTradingLogs({
       </div>
 
       <div className="px-4 sm:px-6 py-2 bg-white/5 border-t border-white/5 text-xs text-white/60">
-        <span>Auto-scroll: {shouldAutoScroll ? "ON" : "OFF"}</span>
+        <span>Auto-scroll: {isNearTop ? "ON" : "OFF"}</span>
       </div>
     </motion.div>
   ) : (
@@ -223,7 +250,6 @@ export default function RobotTradingLogs({
 
       <div
         ref={logsContainerRef}
-        onScroll={handleScroll}
         className="flex-1 overflow-y-auto p-3 space-y-2 font-mono text-xs"
       >
         {logs.length === 0 ? (
@@ -238,9 +264,9 @@ export default function RobotTradingLogs({
             {reversedLogs.map((log) => (
               <motion.div
                 key={log.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
                 className={cn("px-3 py-2 rounded border border-border", getLogStyles(log.level))}
               >
@@ -272,7 +298,7 @@ export default function RobotTradingLogs({
       </div>
 
       <div className="p-2 text-xs text-muted-foreground border-t border-border">
-        Auto-scroll: {shouldAutoScroll ? "ON" : "OFF"}
+        <span>Auto-scroll: {isNearTop ? "ON" : "OFF"}</span>
       </div>
     </div>
   )

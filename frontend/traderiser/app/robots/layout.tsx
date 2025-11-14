@@ -31,6 +31,7 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
+  const [loginType, setLoginType] = useState<"real" | "demo">("real");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,33 +54,33 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
 
       try {
         const data: User = JSON.parse(raw);
-        if (!data || !data.accounts || !Array.isArray(data.accounts)) {
-          throw new Error("Invalid session data: accounts missing or not an array");
+        if (!data?.accounts?.length) {
+          throw new Error("Invalid session data: accounts missing");
         }
 
         const normalizedUser: User = {
           ...data,
-          accounts: data.accounts.map((acc: Account) => ({
-            ...acc,
-            balance: Number(acc.balance) || 0,
+          accounts: data.accounts.map((a) => ({
+            ...a,
+            balance: Number(a.balance) || 0,
           })),
         };
 
         setIsLoggedIn(true);
         setUser(normalizedUser);
+
         const activeId = localStorage.getItem("active_account_id");
         const account =
-          normalizedUser.accounts.find((acc: Account) => acc.id === Number(activeId)) ||
-          normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") ||
+          normalizedUser.accounts.find((a) => a.id === Number(activeId)) ||
+          normalizedUser.accounts.find((a) => a.account_type === "standard") ||
           normalizedUser.accounts[0];
 
-        if (!account) {
-          throw new Error("No valid account found in session data");
-        }
+        if (!account) throw new Error("No valid account found");
 
         setActiveAccount(account);
-      } catch (error) {
-        console.error("Error parsing user_session:", error);
+        setLoginType(account.account_type === "demo" ? "demo" : "real");
+      } catch (e) {
+        console.error(e);
         setIsLoggedIn(false);
         setUser(null);
         setActiveAccount(null);
@@ -96,14 +97,64 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
     return () => window.removeEventListener("session-updated", loadSession);
   }, []);
 
+  const handleSwitchAccount = (account: Account) => {
+    if (!account) return;
+
+    try {
+      localStorage.setItem("active_account_id", account.id.toString());
+      localStorage.setItem("account_type", account.account_type);
+      localStorage.setItem(
+        "login_type",
+        account.account_type === "demo" ? "demo" : "real"
+      );
+
+      const updatedUser: User = {
+        ...user!,
+        accounts: user!.accounts.map((a) =>
+          a.id === account.id ? { ...a, balance: Number(account.balance) || 0 } : a
+        ),
+      };
+
+      setUser(updatedUser);
+      setActiveAccount(account);
+      setLoginType(account.account_type === "demo" ? "demo" : "real");
+
+      localStorage.setItem("user_session", JSON.stringify(updatedUser));
+      window.dispatchEvent(new Event("session-updated"));
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to switch account");
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     setIsLoggedIn(false);
     setUser(null);
     setActiveAccount(null);
-    window.dispatchEvent(new Event("session-updated"));
     window.location.href = "/login";
   };
+
+  // ---- SAME FILTERING LOGIC AS DASHBOARD ----
+  const availableAccounts = loginType === "real"
+    ? (user?.accounts || []).filter((a) => a.account_type !== "demo")
+    : (user?.accounts || []).filter((a) => a.account_type === "demo");
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-white">
+        Loading...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-400">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white">
@@ -113,18 +164,13 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
         accountBalance={Number(activeAccount?.balance) || 0}
         showBalance={true}
         activeAccount={activeAccount}
-        accounts={user?.accounts || []}
-        onSwitchAccount={(account: Account) => {
-          localStorage.setItem("active_account_id", account.id.toString());
-          localStorage.setItem("account_type", account.account_type);
-          setActiveAccount(account);
-          window.dispatchEvent(new Event("session-updated"));
-        }}
+        accounts={availableAccounts}
+        onSwitchAccount={handleSwitchAccount}
         onLogout={handleLogout}
       />
       <div className="flex flex-1">
         <Sidebar
-          loginType={activeAccount?.account_type === "demo" ? "demo" : "real"}
+          loginType={loginType}
           activeAccount={activeAccount}
         />
         <main className="flex-1 w-full overflow-auto md:pl-64">{children}</main>

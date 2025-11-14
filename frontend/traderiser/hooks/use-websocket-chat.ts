@@ -33,9 +33,9 @@ export function useWebSocketChat({
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     // Validate URL: accept ws://, wss://, http://, https://
-    if (!url || typeof url !== "string") {
-      console.error("[WebSocket] Invalid URL: not a string", url)
-      onError?.("Invalid WebSocket URL")
+    if (!url || typeof url !== "string" || url.trim() === "") {
+      console.warn("[WebSocket] No URL provided – connection skipped")
+      onError?.("WebSocket URL not configured")
       return
     }
 
@@ -47,7 +47,7 @@ export function useWebSocketChat({
     } else if (wsUrl.startsWith("https://")) {
       wsUrl = wsUrl.replace("https://", "wss://")
     } else if (!wsUrl.startsWith("ws://") && !wsUrl.startsWith("wss://")) {
-      console.error("[WebSocket] Invalid protocol. Must be ws://, wss://, http://, or https://", url)
+      console.warn("[WebSocket] Invalid protocol. Must be ws://, wss://, http://, or https://", url)
       onError?.("WebSocket URL must use ws://, wss://, http://, or https://")
       return
     }
@@ -70,15 +70,19 @@ export function useWebSocketChat({
           if (message.type === "message" && onMessage) {
             onMessage(message.data)
           } else if (message.type === "typing" && onTyping) {
-            onTyping(message.data?.is_typing ?? false)
+            onTyping(message.data?.is_typing === true)
+          } else if (message.type === "connection" && onConnected) {
+            onConnected()
+          } else if (message.type === "error" && onError) {
+            onError(message.data?.error || "Unknown error")
           }
-        } catch (e) {
-          console.error("[WebSocket] Failed to parse message:", e, "Raw:", event.data)
+        } catch (err) {
+          console.warn("[WebSocket] Failed to parse message:", event.data)
         }
       }
 
       wsRef.current.onerror = () => {
-        console.warn("[WebSocket] Connection error (check onclose for details)")
+        console.warn("[WebSocket] Connection error")
         onError?.("Connection failed")
       }
 
@@ -137,9 +141,15 @@ export function useWebSocketChat({
   }, [])
 
   useEffect(() => {
-    connect()
+    if (url && url.trim() !== "") {
+      connect()
+    } else {
+      console.warn("[WebSocket] URL is empty – connection skipped")
+      onError?.("WebSocket URL not configured")
+    }
+
     return () => disconnect()
-  }, [connect, disconnect])
+  }, [connect, disconnect, url, onError])
 
   return { isConnected, send, disconnect }
 }

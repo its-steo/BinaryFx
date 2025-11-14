@@ -515,7 +515,17 @@ export const getPriceHistory = (data: { symbol: string; timeframe: string }) =>
 
 export const getRobots = () => apiRequest("/trading/robots/")
 export const getUserRobots = () => apiRequest("/trading/user-robots/")
-export const purchaseRobot = (robotId: number) => apiRequest(`/trading/purchase/${robotId}/`, { method: "POST" })
+export const purchaseRobot = (
+  robotId: number,
+  account_type: "standard" | "demo" = "standard"   // default to real account
+) =>
+  apiRequest<{
+    message: string
+  }>(`/trading/robots/${robotId}/purchase/`, {
+    method: "POST",
+    body: JSON.stringify({ account_type }),
+  })
+  
 export const resetDemoBalance = () => apiRequest("/accounts/demo/reset/", { method: "POST" })
 
 export const getBots = () => apiRequest("/bots/")

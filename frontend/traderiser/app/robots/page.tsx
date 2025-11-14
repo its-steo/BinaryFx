@@ -31,41 +31,69 @@ interface DashboardData {
 
 export default function RobotsPage() {
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
+  const [loginType, setLoginType] = useState<"real" | "demo">("real");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const syncFromStorage = () => {
+    const type = localStorage.getItem("account_type") || "standard";
+    setLoginType(type === "demo" ? "demo" : "real");
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
+    const fetch = async () => {
       try {
-        const { data, error: apiError } = await api.getDashboard();
-        if (apiError) throw new Error(apiError as string);
+        const { data, error: apiErr } = await api.getDashboard();
+        if (apiErr) throw new Error(apiErr as string);
 
         const dashboard = data as unknown as DashboardData;
-        if (!dashboard || !dashboard.accounts || !Array.isArray(dashboard.accounts)) {
-          throw new Error("Invalid dashboard data");
-        }
+        if (!dashboard?.accounts?.length) throw new Error("Invalid data");
+
         const activeId = localStorage.getItem("active_account_id");
         const account =
-          dashboard.accounts.find((a: Account) => a.id === Number(activeId)) ||
-          dashboard.accounts.find((a: Account) => a.account_type === "standard") ||
+          dashboard.accounts.find((a) => a.id === Number(activeId)) ||
+          dashboard.accounts.find((a) => a.account_type === "standard") ||
           dashboard.accounts[0];
 
-        if (!account) {
-          throw new Error("No valid account found");
-        }
+        if (!account) throw new Error("No account");
 
         setActiveAccount(account);
-      } catch (err) {
-        setError((err as Error).message);
+        syncFromStorage();
+      } catch (e) {
+        setError((e as Error).message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-    window.addEventListener("session-updated", fetchData);
-    return () => window.removeEventListener("session-updated", fetchData);
+    fetch();
+    const handler = () => {
+      fetch();
+      syncFromStorage();
+    };
+    window.addEventListener("session-updated", handler);
+    return () => window.removeEventListener("session-updated", handler);
   }, []);
+
+  // ---- Balance update helper (used by marketplace) ----
+  const updateBalance = (newBalance: number) => {
+    if (!activeAccount) return;
+
+    const updated = { ...activeAccount, balance: newBalance };
+    setActiveAccount(updated);
+
+    const raw = localStorage.getItem("user_session");
+    if (!raw) return;
+    const session: User = JSON.parse(raw);
+    const newSession: User = {
+      ...session,
+      accounts: session.accounts.map((a) =>
+        a.id === activeAccount.id ? updated : a
+      ),
+    };
+    localStorage.setItem("user_session", JSON.stringify(newSession));
+    window.dispatchEvent(new Event("session-updated"));
+  };
 
   if (loading) {
     return (
@@ -82,7 +110,7 @@ export default function RobotsPage() {
     return (
       <div className="flex items-center justify-center min-h-screen text-red-400">
         <div className="text-center max-w-md p-6">
-          <div className="text-6xl mb-4">⚠️</div>
+          <div className="text-6xl mb-4">Warning</div>
           <h2 className="text-xl font-bold mb-2">Error</h2>
           <p className="mb-6">{error}</p>
           <button
@@ -106,8 +134,12 @@ export default function RobotsPage() {
 
       {/* Balance Card */}
       <div className="rounded-2xl p-6 bg-white/10 backdrop-blur-md border border-white/20">
-        <p className="text-sm text-white/60 mb-2">Account Balance</p>
-        <p className="text-4xl font-bold">${formatCurrency(activeAccount?.balance || 0)}</p>
+        <p className="text-sm text-white/60 mb-2">
+          {loginType === "demo" ? "Demo" : "Real"} Account Balance
+        </p>
+        <p className="text-4xl font-bold">
+          ${formatCurrency(activeAccount?.balance || 0)}
+        </p>
       </div>
 
       {/* Tabs */}
@@ -130,20 +162,7 @@ export default function RobotsPage() {
         <TabsContent value="marketplace">
           <RobotMarketplace
             balance={activeAccount?.balance || 0}
-            onBalanceChange={(newBalance: number) => {
-              if (!activeAccount) return;
-              const updatedAccount = { ...activeAccount, balance: newBalance };
-              setActiveAccount(updatedAccount);
-              const userSession = JSON.parse(localStorage.getItem("user_session") || "{}");
-              const updatedSession: User = {
-                ...userSession,
-                accounts: userSession.accounts.map((acc: Account) =>
-                  acc.id === activeAccount.id ? updatedAccount : acc
-                ),
-              };
-              localStorage.setItem("user_session", JSON.stringify(updatedSession));
-              window.dispatchEvent(new Event("session-updated"));
-            }}
+            onBalanceChange={updateBalance}
           />
         </TabsContent>
 

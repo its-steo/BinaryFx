@@ -11,6 +11,7 @@ from .serializers import MarketSerializer, TradeTypeSerializer, RobotSerializer,
 from accounts.models import Account
 from dashboard.models import Transaction
 from decimal import Decimal, InvalidOperation
+from django.db.models import Max
 
 class MarketListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -66,41 +67,48 @@ class PurchaseRobotView(APIView):
         except Account.DoesNotExist:
             return Response({'error': 'Account not found'}, status=status.HTTP_404_NOT_FOUND)
         
+# trading/views.py → replace ONLY the UserRobotListView
 class UserRobotListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user_robots = UserRobot.objects.filter(user=request.user)
-        
-        try:
-            # Check if user has a demo account
-            Account.objects.get(user=request.user, account_type='demo')
-            
-            # Get demo-available robots not already owned
-            available_robots = Robot.objects.filter(available_for_demo=True).exclude(
-                id__in=user_robots.values_list('robot_id', flat=True)
-            )
-            
-            # Serialize owned robots
-            user_serializer = UserRobotSerializer(user_robots, many=True)
-            
-            # Create fake UserRobot instances for demo-available ones (to match serializer format)
-            fake_user_robots = [
-                UserRobot(user=request.user, robot=robot, purchased_at=None) for robot in available_robots
-            ]
-            fake_serializer = UserRobotSerializer(fake_user_robots, many=True)
-            
-            # Combine data
-            combined_data = user_serializer.data + fake_serializer.data
-            return Response(combined_data)
-        
-        except Account.DoesNotExist:
-            # No demo account: only return owned robots
-            serializer = UserRobotSerializer(user_robots, many=True)
-            return Response(serializer.data)
+        user = request.user
 
+        # 1. Check if user is in DEMO mode
+        is_demo = Account.objects.filter(user=user, account_type='demo').exists()
+
+        if is_demo:
+            # DEMO: Show ALL robots with available_for_demo=True
+            # (even if not purchased — they get fake UserRobot with purchased_at=None)
+            demo_robots = Robot.objects.filter(available_for_demo=True)
+            fake_entries = []
+            fake_id = UserRobot.objects.aggregate(Max('id'))['id__max'] or 0
+            fake_id += 1
+
+            for robot in demo_robots:
+                # Only create fake if not already owned
+                if not UserRobot.objects.filter(user=user, robot=robot).exists():
+                    fake = UserRobot(
+                        id=fake_id,
+                        user=user,
+                        robot=robot,
+                        purchased_at=None
+                    )
+                    fake_entries.append(fake)
+                    fake_id += 1
+
+            real_entries = UserRobot.objects.filter(user=user)
+            combined = list(real_entries) + fake_entries
+            serializer = UserRobotSerializer(combined, many=True)
+        else:
+            # REAL ACCOUNT: ONLY show purchased robots
+            owned = UserRobot.objects.filter(user=user)
+            serializer = UserRobotSerializer(owned, many=True)
+
+        return Response(serializer.data)
+        return Response(serializer.data)
+        
 # trading/views.py (relevant part: PlaceTradeView)
-
 class PlaceTradeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -118,6 +126,7 @@ class PlaceTradeView(APIView):
         target_profit = data.get('target_profit')
         stop_loss = data.get('stop_loss')
 
+        # === Validate optional target_profit / stop_loss ===
         if target_profit is not None:
             try:
                 target_profit = Decimal(target_profit)
@@ -130,19 +139,21 @@ class PlaceTradeView(APIView):
             except:
                 return Response({'error': 'Invalid stop loss'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # === Amount validation ===
         if amount < Decimal('0.5'):
             return Response({'error': 'Minimum trade amount is 0.5 USD'}, status=status.HTTP_400_BAD_REQUEST)
-
         if amount <= 0:
             return Response({'error': 'Amount must be positive'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            # === Fetch core objects ===
             market = Market.objects.get(id=market_id)
             trade_type = TradeType.objects.get(id=trade_type_id)
             account = Account.objects.get(user=user, account_type=account_type)
             is_demo = account.account_type == 'demo'
-            effective_sashi = user.is_sashi or is_demo
+            effective_sashi = user.is_sashi or is_demo  # DEMO = FULL SASHI
 
+            # === Robot validation ===
             used_robot = None
             if robot_id:
                 robot = Robot.objects.get(id=robot_id)
@@ -150,53 +161,43 @@ class PlaceTradeView(APIView):
                     if not robot.available_for_demo:
                         return Response({'error': 'Robot not available for demo'}, status=status.HTTP_400_BAD_REQUEST)
                 else:
-                    UserRobot.objects.get(user=user, robot=robot)  # Check ownership for real
+                    UserRobot.objects.get(user=user, robot=robot)  # Must own it
                 used_robot = robot
 
-            # Martingale setup
+            # === Martingale setup ===
             martingale_mult = TradingSetting.get_instance().martingale_multiplier
-            trades = []
-            total_net_profit = Decimal('0.00')
-            session_profit_before = Decimal('0.00')  # Could query sum of today's profits if needed
-
-            # Calculate current amount for this level
             current_amount = amount * (martingale_mult ** martingale_level)
 
             if account.balance < current_amount:
                 return Response({'error': 'Insufficient balance for this trade'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Deduct stake instantly
+            # === Deduct stake ===
             account.balance -= current_amount
             account.save()
 
-            # Determine win probability (updated for realism)
-            if use_martingale and not effective_sashi:
-                win_prob = 0.1  # Keep 10% for non-Sashi with martingale
-            elif used_robot:
-                if effective_sashi:
-                    # Base 80% for Sashi with robot; boost to 95% on martingale recovery levels
-                    win_prob = 0.8 if martingale_level == 0 else 0.95
+            # === WIN PROBABILITY: ROBOT FIRST ===
+            if used_robot:
+                robot_rate = used_robot.win_rate / 100.0
+                if robot_rate >= 0.90:
+                    win_prob = 0.90  # Elite robot → 90% win for ANYONE
                 else:
-                    robot_wr = used_robot.win_rate
-                    if robot_wr >= 90:
-                        win_prob = 0.8  # Adjusted down for more realism, but still high
-                    elif robot_wr >= 50:
-                        win_prob = robot_wr / 100.0
-                    else:
-                        win_prob = 0.2  # Adjusted up to 20% for occasional wins
+                    win_prob = robot_rate  # Exact robot rate (Sashi ignored)
             else:
+                # === NO ROBOT: SASHI / NON-SASHI LOGIC ===
                 if effective_sashi:
-                    # Base 80% for Sashi; boost to 95% on martingale recovery levels
-                    win_prob = 0.8 if martingale_level == 0 else 0.95
+                    win_prob = 0.80 if martingale_level == 0 else 0.95
                 else:
-                    win_prob = 0.2  # Adjusted up to 20% for non-Sashi (occasional 1-2 wins, but more losses)
+                    win_prob = 0.20
 
-            # Simulate delay for realism (1-5s)
-            time.sleep(random.uniform(1, 5))
+            # === NON-SASHI MARTINGALE PENALTY (ONLY IF NO ROBOT) ===
+            if use_martingale and not effective_sashi and not used_robot:
+                win_prob = 0.10
 
+            # === Simulate trade outcome ===
+            time.sleep(random.uniform(1, 5))  # Realism delay
             is_win = random.random() < win_prob
 
-            # Simulate spots
+            # === Simulate price movement ===
             entry_spot = random.uniform(1.0, 100.0)
             delta = random.uniform(0.01, 0.1)
             if direction == 'buy':
@@ -205,6 +206,7 @@ class PlaceTradeView(APIView):
                 exit_spot = entry_spot - delta if is_win else entry_spot + delta
             current_spot = exit_spot
 
+            # === Payout calculation ===
             if is_win:
                 gross_payout = current_amount * market.profit_multiplier
                 net_profit = gross_payout - current_amount
@@ -215,9 +217,7 @@ class PlaceTradeView(APIView):
 
             account.save()
 
-            total_net_profit = net_profit
-
-            # Create Trade record
+            # === Create Trade record ===
             trade = Trade.objects.create(
                 user=user,
                 account=account,
@@ -230,15 +230,14 @@ class PlaceTradeView(APIView):
                 used_martingale=use_martingale and martingale_level > 0,
                 martingale_level=martingale_level,
                 used_robot=used_robot,
-                session_profit_before=session_profit_before,
+                session_profit_before=Decimal('0.00'),
                 is_demo=is_demo,
                 entry_spot=Decimal(entry_spot).quantize(Decimal('0.00')),
                 exit_spot=Decimal(exit_spot).quantize(Decimal('0.00')),
                 current_spot=Decimal(current_spot).quantize(Decimal('0.00'))
             )
-            trades.append(trade)
 
-            # Create Transaction
+            # === Create Transaction log ===
             Transaction.objects.create(
                 account=account,
                 amount=net_profit,
@@ -246,28 +245,26 @@ class PlaceTradeView(APIView):
                 description=f"{'Demo ' if is_demo else ''}Trade on {market.name}: {'Win' if is_win else 'Loss'} (Level {martingale_level})"
             )
 
-            # No loop, so no internal stop_loss or target_profit checks; handled in frontend
-
-            message = 'Trade completed.'
-
             return Response({
-                'trades': TradeSerializer(trades, many=True).data,
-                'total_profit': total_net_profit,
-                'message': message,
+                'trades': TradeSerializer([trade], many=True).data,
+                'total_profit': net_profit,
+                'message': 'Trade completed.',
                 'is_demo': is_demo
             }, status=status.HTTP_201_CREATED)
 
-        except (Market.DoesNotExist, TradeType.DoesNotExist, Account.DoesNotExist, Robot.DoesNotExist, UserRobot.DoesNotExist) as e:
-            # Rollback current deduction on error
-            current_amount = amount * (TradingSetting.get_instance().martingale_multiplier ** martingale_level)
-            account.balance += current_amount
-            account.save()
-            return Response({'error': str(e)}, status=status.HTTP_404_NOT_FOUND)
+        # === ERROR HANDLING WITH ROLLBACK ===
+        except (Market.DoesNotExist, TradeType.DoesNotExist, Account.DoesNotExist,
+                Robot.DoesNotExist, UserRobot.DoesNotExist) as e:
+            if 'account' in locals():
+                account.balance += current_amount
+                account.save()
+            return Response({'error': 'Resource not found'}, status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
-            current_amount = amount * (TradingSetting.get_instance().martingale_multiplier ** martingale_level)
-            account.balance += current_amount
-            account.save()
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            if 'account' in locals():
+                account.balance += current_amount
+                account.save()
+            return Response({'error': 'Trade failed'}, status=status.HTTP_400_BAD_REQUEST)
              
 class TradeHistoryView(APIView):
     permission_classes = [IsAuthenticated]

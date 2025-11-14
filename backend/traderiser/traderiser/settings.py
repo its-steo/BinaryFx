@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = 'django-insecure-u#@omyh#sp*#u=^4lbv+vt*yn=&ykf*lm(sg^#9kv4ln$-=gdo'
-DEBUG = True
+DEBUG = False
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'binaryfx-delta.vercel.app', 'binaryfx.onrender.com','traderiserpro.co.ke', 'www.traderiserpro.co.ke','https://binaryfx-delta.vercel.app','https://binaryfx.onrender.com','https://traderiserpro.co.ke','https://www.traderiserpro.co.ke']
 
 # CORS settings
