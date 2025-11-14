@@ -31,7 +31,7 @@ import customercare.routing
 # ----------------------------------------------------------------------
 application = ProtocolTypeRouter({
     # Normal HTTP requests (DRF, templates, static, etc.)
-    "http": django_asgi_app,
+    "http": get_asgi_application(),
 
     # WebSocket connections
     "websocket": QueryStringJWTAuthMiddleware(

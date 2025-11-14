@@ -14,8 +14,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = False
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'binaryfx-delta.vercel.app', 'binaryfx.onrender.com','traderiserpro.co.ke', 'www.traderiserpro.co.ke','https://binaryfx-delta.vercel.app','https://binaryfx.onrender.com','https://traderiserpro.co.ke','https://www.traderiserpro.co.ke']
-
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'binaryfx-delta.vercel.app',
+    'binaryfx.onrender.com',
+    'traderiserpro.co.ke',
+    'www.traderiserpro.co.ke',
+]
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
@@ -26,6 +32,15 @@ CORS_ALLOWED_ORIGINS = [
     "https://binaryfx.onrender.com",
     'https://traderiserpro.co.ke',
     'https://www.traderiserpro.co.ke',
+]
+# REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://binaryfx-delta.vercel.app",
+    "https://binaryfx.onrender.com",
+    "https://traderiserpro.co.ke",
+    "https://www.traderiserpro.co.ke",
 ]
 
 INSTALLED_APPS = [
@@ -217,6 +232,7 @@ SESSION_COOKIE_AGE = 1209600  # 2 weeks
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
 SESSION_COOKIE_SAMESITE = 'Lax'  # or 'None' if cross-origin
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
