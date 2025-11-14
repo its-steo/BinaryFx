@@ -5,6 +5,7 @@ import asyncio
 import time
 from datetime import datetime
 from typing import Optional
+from urllib.parse import parse_qs
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -156,12 +157,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 
     # ------------------------------------------------------------------
-    # AI AUTO-REPLY LOGIC
+    # AI LOGIC
     # ------------------------------------------------------------------
     async def maybe_trigger_ai_reply(self):
-        # Always reply on first user message
-        user_msg_count = await self.get_user_message_count()
-        if user_msg_count == 1:
+        count = await self.get_user_message_count()
+        if count == 1:
             await asyncio.sleep(1)  # Natural delay
             await self.send_ai_reply("Hello! How can I assist you today?")
 
@@ -293,6 +293,184 @@ class ChatConsumer(AsyncWebsocketConsumer):
         from .models import Message
         msg = self.thread.messages.filter(sender__is_staff=True, is_system=False).last()
         return msg.sent_at if msg else None
+
+    @database_sync_to_async
+    def serialize_message(self, message, is_me: bool, is_system: bool = False):
+        return {
+            "type": "new_message",
+            "id": message.id,
+            "content": message.content,
+            "sent_at": message.sent_at.isoformat(),
+            "is_read": message.is_read,
+            "is_system": is_system,
+            "is_me": is_me,
+            "sender": {
+                "username": message.sender.username,
+                "is_staff": message.sender.is_staff
+            }
+        }
+
+
+# NEW: Admin Consumer for real-time admin panel chat
+class AdminChatConsumer(AsyncWebsocketConsumer):
+    """
+    Real-time chat for admins
+    - Staff only (checks is_staff)
+    - Joins all active user chat groups on connect
+    - Can send/receive to specific user threads
+    - Handles typing and messages
+    - Use ?user_id=123 to connect to specific thread (optional for multi-thread support)
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = None
+        self.room_groups = []  # List of joined groups (for disconnect)
+
+    # ------------------------------------------------------------------
+    # CONNECTION
+    # ------------------------------------------------------------------
+    async def connect(self):
+        self.user = self.scope["user"]
+        if not self.user.is_authenticated or not self.user.is_staff:
+            logger.warning(f"[AdminChat] Unauthorized connect attempt from {self.scope['client'][0]}")
+            await self.close(code=4003)  # Forbidden
+            raise StopConsumer()
+
+        await self.accept()
+        logger.info(f"[AdminChat] Admin {self.user.id} connected")
+
+        # Join all active threads or specific one
+        query_string = self.scope.get("query_string", b"").decode("utf-8")
+        query_params = parse_qs(query_string)
+        target_user_id = query_params.get("user_id", [None])[0]
+
+        if target_user_id:
+            # Join specific user thread
+            room_group_name = f"chat_{target_user_id}"
+            await self.channel_layer.group_add(room_group_name, self.channel_name)
+            self.room_groups.append(room_group_name)
+            # Load history for that thread
+            thread = await self.get_thread_by_user_id(int(target_user_id))
+            messages = await self.get_messages(thread)
+            await self.send(json.dumps({
+                "type": "chat_history",
+                "user_id": target_user_id,
+                "messages": messages
+            }))
+        else:
+            # Join all active threads
+            active_threads = await self.get_active_threads()
+            for thread in active_threads:
+                room_group_name = f"chat_{thread.user.id}"
+                await self.channel_layer.group_add(room_group_name, self.channel_name)
+                self.room_groups.append(room_group_name)
+
+    async def disconnect(self, close_code):
+        for group in self.room_groups:
+            await self.channel_layer.group_discard(group, self.channel_name)
+        logger.info(f"[AdminChat] Admin {self.user.id if self.user else 'unknown'} disconnected")
+
+    # ------------------------------------------------------------------
+    # RECEIVE FROM CLIENT
+    # ------------------------------------------------------------------
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            msg_type = data.get("type")
+        except json.JSONDecodeError:
+            return
+
+        if msg_type == "message":
+            await self.handle_admin_message(data.get("content", ""), data.get("user_id"))
+        elif msg_type == "typing":
+            await self.handle_typing(data.get("is_typing", False), data.get("user_id"))
+
+    async def handle_admin_message(self, content: str, target_user_id: int):
+        if not content.strip() or not target_user_id:
+            return
+
+        thread = await self.get_thread_by_user_id(target_user_id)
+        message = await self.create_message(thread, content.strip())
+        serialized = await self.serialize_message(message, is_me=True)  # For admin, is_me=True
+
+        room_group_name = f"chat_{target_user_id}"
+        await self.channel_layer.group_send(
+            room_group_name,
+            {
+                "type": "chat_message",
+                "message": serialized
+            }
+        )
+
+    async def handle_typing(self, is_typing: bool, target_user_id: int):
+        if not target_user_id:
+            return
+
+        room_group_name = f"chat_{target_user_id}"
+        await self.channel_layer.group_send(
+            room_group_name,
+            {
+                "type": "typing",
+                "is_typing": is_typing,
+                "user_id": self.user.id  # Admin's ID
+            }
+        )
+
+    # ------------------------------------------------------------------
+    # CHANNEL LAYER EVENTS
+    # ------------------------------------------------------------------
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps(event["message"]))
+
+    async def typing(self, event):
+        await self.send(json.dumps({
+            "type": "typing",
+            "is_typing": event["is_typing"],
+            "user_id": event["user_id"]
+        }))
+
+    # ------------------------------------------------------------------
+    # DATABASE HELPERS
+    # ------------------------------------------------------------------
+    @database_sync_to_async
+    def get_active_threads(self):
+        from .models import ChatThread
+        return list(ChatThread.objects.filter(is_active=True))
+
+    @database_sync_to_async
+    def get_thread_by_user_id(self, user_id):
+        from .models import ChatThread
+        return ChatThread.objects.get(user_id=user_id)
+
+    @database_sync_to_async
+    def get_messages(self, thread):
+        from .models import Message
+        msgs = thread.messages.select_related('sender').all()
+        return [
+            {
+                "id": m.id,
+                "content": m.content,
+                "sent_at": m.sent_at.isoformat(),
+                "is_read": m.is_read,
+                "is_system": m.is_system,
+                "sender": {
+                    "username": m.sender.username,
+                    "is_staff": m.sender.is_staff
+                },
+                "is_me": m.sender == self.user  # For admin view
+            }
+            for m in msgs
+        ]
+
+    @database_sync_to_async
+    def create_message(self, thread, content):
+        from .models import Message
+        return Message.objects.create(
+            thread=thread,
+            sender=self.user,
+            content=content
+        )
 
     @database_sync_to_async
     def serialize_message(self, message, is_me: bool, is_system: bool = False):
