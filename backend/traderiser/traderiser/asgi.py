@@ -1,30 +1,39 @@
+# traderiser/asgi.py
 """
 ASGI config for traderiser project.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
+- HTTP → Django views
+- WebSocket → JWT auth → customercare routing
 """
 
-# traderiser/asgi.py
 import os
-from django.core.asgi import get_asgi_application
 
-# 1. SET SETTINGS MODULE
+# ----------------------------------------------------------------------
+# 1. Set the settings module *before* anything else
+# ----------------------------------------------------------------------
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'traderiser.settings')
 
-# 2. LOAD ASGI APP → THIS INITIALIZES DJANGO APPS
-application = get_asgi_application()
+# ----------------------------------------------------------------------
+# 2. Import Django ASGI application (loads models, settings, etc.)
+# ----------------------------------------------------------------------
+from django.core.asgi import get_asgi_application
+django_asgi_app = get_asgi_application()          # <-- keep a reference
 
-# 3. NOW SAFE TO IMPORT ANYTHING
+# ----------------------------------------------------------------------
+# 3. NOW safe to import Channels & your code
+# ----------------------------------------------------------------------
 from channels.routing import ProtocolTypeRouter, URLRouter
 from customercare.middleware import QueryStringJWTAuthMiddleware
 import customercare.routing
 
-# 4. FINAL ASGI ROUTER
+# ----------------------------------------------------------------------
+# 4. Build the final ASGI router
+# ----------------------------------------------------------------------
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(),
+    # Normal HTTP requests (DRF, templates, static, etc.)
+    "http": django_asgi_app,
+
+    # WebSocket connections
     "websocket": QueryStringJWTAuthMiddleware(
         URLRouter(
             customercare.routing.websocket_urlpatterns

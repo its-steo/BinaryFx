@@ -111,11 +111,22 @@ DATABASES = {
 }
 
 ASGI_APPLICATION = 'traderiser.asgi.application'
+# Redis Layer (already added from earlier)
+import os
+from urllib.parse import urlparse
+
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+redis_parsed = urlparse(REDIS_URL)
+redis_address = f"redis://{redis_parsed.username}:{redis_parsed.password}@{redis_parsed.hostname}:{redis_parsed.port or 6379}{redis_parsed.path or ''}"
+
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [redis_address],
+            "symmetric_encryption_keys": [SECRET_KEY],
+            "capacity": 1000,
+            "expiry": 60,
         },
     },
 }
