@@ -14,7 +14,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Traderiser - Professional Trading Platform",
+  title: "TradeRiser – Next-Gen Trading with Smart Automation",
   description: "Trade binary options, forex, crypto, and synthetic indices with advanced automation",
   generator: "v0.app",
   manifest: "/manifest.json",
