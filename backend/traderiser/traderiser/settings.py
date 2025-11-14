@@ -1,33 +1,42 @@
-
+# traderiser/settings.py
 import os
 from pathlib import Path
-from decouple import config
+from decouple import config, Csv
 from datetime import timedelta
-from storages.backends.s3boto3 import S3Boto3Storage
-from decouple import config
 
-
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Quick-start development settings - unsuitable for production
-SECRET_KEY = 'django-insecure-u#@omyh#sp*#u=^4lbv+vt*yn=&ykf*lm(sg^#9kv4ln$-=gdo'
-DEBUG = True
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'binaryfx-delta.vercel.app', 'binaryfx.onrender.com','traderiserpro.co.ke', 'www.traderiserpro.co.ke','https://binaryfx-delta.vercel.app','https://binaryfx.onrender.com','https://traderiserpro.co.ke','https://www.traderiserpro.co.ke']
+# ──────────────────────────────────────────────────────────────
+#  SECURITY & ENVIRONMENT
+# ──────────────────────────────────────────────────────────────
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = False
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='localhost,127.0.0.1',
+    cast=Csv()
+)
+
+# Add Render & Vercel domains
+RENDER_HOST = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_HOST:
+    ALLOWED_HOSTS.append(RENDER_HOST)
+
+# ──────────────────────────────────────────────────────────────
+#  CORS
+# ──────────────────────────────────────────────────────────────
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://binaryfx-delta.vercel.app",
-    "https://binaryfx.onrender.com",
-    'https://traderiserpro.co.ke',
-    'https://WWW.traderiserpro.co.ke',
-]
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000,http://127.0.0.1:3000',
+    cast=Csv()
+)
 
+# ──────────────────────────────────────────────────────────────
+#  APPLICATION DEFINITION
+# ──────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
     'daphne',
     'django.contrib.admin',
@@ -38,18 +47,16 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'corsheaders',
+    'channels',
     'accounts',
     'trading',
-    'corsheaders',
     'dashboard',
     'wallet',
     'forex',
     'agents',
     'customercare',
     'management',
-    'channels',
-
-    
 ]
 
 MIDDLEWARE = [
@@ -65,6 +72,8 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'traderiser.urls'
+WSGI_APPLICATION = 'traderiser.wsgi.application'
+ASGI_APPLICATION = 'traderiser.asgi.application'
 
 TEMPLATES = [
     {
@@ -80,16 +89,16 @@ TEMPLATES = [
         },
     },
 ]
+
 AUTH_USER_MODEL = 'accounts.User'
-
-WSGI_APPLICATION = 'traderiser.wsgi.application'
-
 AUTHENTICATION_BACKENDS = [
     'accounts.backends.EmailBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-
+# ──────────────────────────────────────────────────────────────
+#  DATABASE
+# ──────────────────────────────────────────────────────────────
 
 #DATABASES = {
 #    'default': {
@@ -98,26 +107,29 @@ AUTHENTICATION_BACKENDS = [
 #    }
 #}
 
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'binaryfx'),
-        'USER': os.getenv('DB_USER', 'binaryfx_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk'),
-        'HOST': os.getenv('DB_HOST', 'dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
 
-ASGI_APPLICATION = 'traderiser.asgi.application'
-# Redis Layer (already added from earlier)
-import os
+# ──────────────────────────────────────────────────────────────
+#  REDIS & CHANNEL LAYERS
+# ──────────────────────────────────────────────────────────────
+REDIS_URL = config('REDIS_URL', default='redis://localhost:6379')
 from urllib.parse import urlparse
-
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 redis_parsed = urlparse(REDIS_URL)
-redis_address = f"redis://{redis_parsed.username}:{redis_parsed.password}@{redis_parsed.hostname}:{redis_parsed.port or 6379}{redis_parsed.path or ''}"
+redis_address = (
+    f"redis://"
+    f"{redis_parsed.username}:{redis_parsed.password}@"
+    f"{redis_parsed.hostname}:{redis_parsed.port or 6379}"
+    f"{redis_parsed.path or ''}"
+)
 
 CHANNEL_LAYERS = {
     "default": {
@@ -131,6 +143,9 @@ CHANNEL_LAYERS = {
     },
 }
 
+# ──────────────────────────────────────────────────────────────
+#  REST FRAMEWORK & JWT
+# ──────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -140,90 +155,84 @@ REST_FRAMEWORK = {
     ],
 }
 
-
-# OpenAI Config
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')  
-OPENAI_MODEL = 'gpt-3.5-turbo'
-
-# Frontend URL for signals/emails
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-
-
-# Email configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_HOST_USER = 'traderiserpro@gmail.com'
-EMAIL_HOST_PASSWORD = 'ixinhoofcsnzjkqb'  # App-specific password for Gmail
-EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = 'TradeRiser <traderiserpro@gmail.com>'  # Must match EMAIL_HOST_USER or a verified alias
-ADMIN_EMAIL = 'traderiserpro@gmail.com'  # Admin email for deposit notifications
-
-# ──────────────────────────────────────────────────────────────
-#  S3 / Media – read from .env
-# ──────────────────────────────────────────────────────────────
-from decouple import config, Csv
-
-# ---- AWS credentials ------------------------------------------------
-AWS_ACCESS_KEY_ID      = config('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY  = config('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME     = config('AWS_S3_REGION_NAME', default='us-east-1')
-
-# ---- Optional S3 tweaks --------------------------------------------
-AWS_S3_CUSTOM_DOMAIN   = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-AWS_DEFAULT_ACL        = config('AWS_DEFAULT_ACL', default=None, cast=lambda v: None if v == 'None' else v)
-AWS_S3_FILE_OVERWRITE  = config('AWS_S3_FILE_OVERWRITE', default=False, cast=bool)
-
-# ---- Storage choice -------------------------------------------------
-if DEBUG:
-    # ---- LOCAL DEVELOPMENT (no S3, no credentials needed) ----------
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
-    MEDIA_ROOT = BASE_DIR / 'media'
-    MEDIA_URL  = '/media/'
-else:
-    # ---- PRODUCTION / STAGING (real S3) -----------------------------
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-
-# Optional: Ensure media URLs point to S3
-MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
-
-
-
-
-
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
-USE_I18N = True
-USE_TZ = True
-
-SESSION_COOKIE_AGE = 1209600  # 2 weeks
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
-SESSION_COOKIE_SAMESITE = 'Lax'  # or 'None' if cross-origin
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# ──────────────────────────────────────────────────────────────
+#  OPENAI
+# ──────────────────────────────────────────────────────────────
+OPENAI_API_KEY = config('OPENAI_API_KEY', default=None)
+OPENAI_MODEL = config('OPENAI_MODEL', default='gpt-3.5-turbo')
+
+# ──────────────────────────────────────────────────────────────
+#  EMAIL
+# ──────────────────────────────────────────────────────────────
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = f"TradeRiser <{EMAIL_HOST_USER}>"
+ADMIN_EMAIL = config('ADMIN_EMAIL', default=EMAIL_HOST_USER)
+
+# ──────────────────────────────────────────────────────────────
+#  FRONTEND URL
+# ──────────────────────────────────────────────────────────────
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+
+# ──────────────────────────────────────────────────────────────
+#  S3 STORAGE
+# ──────────────────────────────────────────────────────────────
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default=None)
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default=None)
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com' if AWS_STORAGE_BUCKET_NAME else None
+AWS_DEFAULT_ACL = config('AWS_DEFAULT_ACL', default=None)
+AWS_S3_FILE_OVERWRITE = config('AWS_S3_FILE_OVERWRITE', default=False, cast=bool)
+
+if DEBUG or not AWS_ACCESS_KEY_ID:
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    MEDIA_ROOT = BASE_DIR / 'media'
+    MEDIA_URL = '/media/'
+else:
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/' if AWS_S3_CUSTOM_DOMAIN else '/media/'
+
+# ──────────────────────────────────────────────────────────────
+#  STATIC FILES
+# ──────────────────────────────────────────────────────────────
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'  # Add this line
+
+# ──────────────────────────────────────────────────────────────
+#  PASSWORD VALIDATION
+# ──────────────────────────────────────────────────────────────
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
+
+# ──────────────────────────────────────────────────────────────
+#  INTERNATIONALIZATION
+# ──────────────────────────────────────────────────────────────
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'UTC'
+USE_I18N = True
+USE_TZ = True
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Session
+SESSION_COOKIE_AGE = 1209600
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
