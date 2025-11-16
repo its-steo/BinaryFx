@@ -2,11 +2,95 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { TrendingUp, ChevronRight } from "lucide-react"
+import { TrendingUp, ChevronRight, MessageCircle, X } from "lucide-react"
+import { useEffect, useState } from "react"
 
 export default function LandingPage() {
+  const [showWhatsAppPopup, setShowWhatsAppPopup] = useState(false)
+
+  useEffect(() => {
+    // Check localStorage for join status
+    const hasJoined = localStorage.getItem('joinedWhatsAppChannel')
+    if (!hasJoined) {
+      setShowWhatsAppPopup(true)
+    }
+  }, [])
+
+  const handleJoin = () => {
+    // Deep link to WhatsApp channel
+    window.open('https://whatsapp.com/channel/0029VbBh1Yr4tRrntmwk9T3i', '_blank')
+  }
+
+  const handleJoined = () => {
+    // Mark as joined and hide forever
+    localStorage.setItem('joinedWhatsAppChannel', 'true')
+    setShowWhatsAppPopup(false)
+  }
+
+  const handleClose = () => {
+    setShowWhatsAppPopup(false) // Optional: Allow close without joining
+  }
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative">
+      {/* WhatsApp Channel Popup */}
+      {showWhatsAppPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 md:p-8 max-w-md w-full border border-white/20 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                  <MessageCircle className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Join TRADERISER Channel</h3>
+              </div>
+              <button
+                onClick={handleClose}
+                className="text-white/70 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="space-y-4 mb-6">
+              <p className="text-white/90 text-sm leading-relaxed">
+                Stay connected with exclusive trading signals, real-time market updates, expert tips, and community insights to supercharge your trades on TradeRiser Pro. 
+                <br /><strong>10K+ Kenyan traders already rising together!</strong>
+              </p>
+              <ul className="text-xs text-white/70 space-y-1">
+                <li>• Daily forex & crypto alerts</li>
+                <li>• Live synthetic indices tips</li>
+                <li>• Robot strategy breakdowns</li>
+                <li>• M-Pesa funding hacks</li>
+              </ul>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleJoin}
+                className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Join Channel Now
+              </button>
+              <button
+                onClick={handleJoined}
+                className="text-green-400 hover:text-green-300 font-semibold py-3 px-4 rounded-xl transition-colors border border-green-500/30"
+              >
+                I Have Already Joined
+              </button>
+            </div>
+
+            <p className="text-xs text-white/50 text-center mt-4">
+              No spam – just value. Unsubscribe anytime.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b border-white/10 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -45,7 +129,7 @@ export default function LandingPage() {
                 <div className="group relative rounded-3xl p-4 md:p-6 bg-gradient-to-br from-orange-100 to-orange-50 hover:shadow-lg transition-all duration-300 cursor-pointer">
                   <div className="flex items-center gap-3 md:gap-4">
                     <div className="flex-shrink-0">
-                      <div className="w-10 h-10 md:w-20 md:h-20 rounded-full  flex items-center justify-center overflow-hidden shadow-md">
+                      <div className="w-10 h-10 md:w-20 md:h-20 rounded-full flex items-center justify-center overflow-hidden shadow-md">
                         <Image
                           src="/real-account-icon.png"
                           alt="Real Account"
@@ -75,7 +159,7 @@ export default function LandingPage() {
                 <div className="group relative rounded-3xl p-4 md:p-6 bg-gradient-to-br from-blue-100 to-blue-50 hover:shadow-lg transition-all duration-300 cursor-pointer">
                   <div className="flex items-center gap-3 md:gap-4">
                     <div className="flex-shrink-0">
-                      <div className="w-11 h-11 md:w-20 md:h-20 rounded-full  flex items-center justify-center overflow-hidden shadow-md">
+                      <div className="w-11 h-11 md:w-20 md:h-20 rounded-full flex items-center justify-center overflow-hidden shadow-md">
                         <Image
                           src="/demo-account-icon.png"
                           alt="Demo Account"
