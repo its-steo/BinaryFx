@@ -25,6 +25,7 @@ interface AgentCardProps {
     image?: string
     instructions?: string
     paypal_email?: string
+    paypal_link?: string
     bank_name?: string
     bank_account_name?: string
     bank_account_number?: string
@@ -154,7 +155,18 @@ export default function AgentCard({ agent }: AgentCardProps) {
       {/* NEW: Full Payment Info Display */}
       <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
         <p className="text-xs text-slate-600 mb-2 font-semibold">Payment Details</p>
-        <PaymentInfoDisplay method={agent.method} agent={agent} />
+        <PaymentInfoDisplay 
+          method={agent.method} 
+          agent={{
+            paypal_email: agent.paypal_email,
+            paypal_link: agent.paypal_link,
+            bank_name: agent.bank_name,
+            bank_account_name: agent.bank_account_name,
+            bank_account_number: agent.bank_account_number,
+            bank_swift: agent.bank_swift,
+            mpesa_phone: agent.mpesa_phone,
+          }} 
+        />
       </div>
 
       {/* Action Buttons */}
