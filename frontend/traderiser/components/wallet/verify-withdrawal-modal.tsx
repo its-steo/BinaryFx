@@ -97,7 +97,7 @@ const handleResendOTP = async () => {
         <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 sm:p-8">
           <div className="text-center">
             <p className="text-xl font-bold text-green-600 mb-4">Withdrawal Successful!</p>
-            <p className="text-sm text-gray-600 mb-6">Your withdrawal is pending admin approval.</p>
+            <p className="text-sm text-gray-600 mb-6">Withdrawal request received. Funds will be sent shortly.</p>
             <button
               onClick={handleOkay}
               className="bg-purple-600 text-white py-2 px-4 rounded-lg"

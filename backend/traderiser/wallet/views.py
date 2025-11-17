@@ -20,9 +20,10 @@ from .serializers import (
 from accounts.models import Account
 from dashboard.models import Transaction
 from .payment import PaymentClient
+import logging
 
 logger = logging.getLogger('wallet')
-ADMIN_EMAIL = "steomustadd@gmail.com"
+ADMIN_EMAIL = "trendxbinarytrading@gmail.com"
 
 def generate_reference_id(length: int = 12) -> str:
     """Generate a random alphanumeric reference ID."""
@@ -64,6 +65,9 @@ class MpesaNumberView(APIView):
             return Response(MpesaNumberSerializer(mpesa).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+logger = logging.getLogger('wallet')
+ADMIN_EMAIL = "trendxbinarytrading@gmail.com"  # or get from settings
+
 class DepositView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -79,18 +83,20 @@ class DepositView(APIView):
             incoming_currency = Currency.objects.get(code=incoming_currency_code)
             wallet_currency = Currency.objects.get(code='USD')
             account, _ = Account.objects.get_or_create(user=request.user, account_type=account_type)
-            wallet, _ = Wallet.objects.get_or_create(account=account, wallet_type=wallet_type, currency=wallet_currency, defaults={'balance': Decimal('0.00')})
+            wallet, _ = Wallet.objects.get_or_create(
+                account=account, wallet_type=wallet_type, currency=wallet_currency,
+                defaults={'balance': Decimal('0.00')}
+            )
         except Currency.DoesNotExist:
             return Response({'error': 'Currency not found'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            # Reverse the base and target for deposit (since rate is set as KSH per USD)
             exchange_rate_obj = ExchangeRate.objects.get(
-                base_currency=wallet_currency,  # USD
-                target_currency=incoming_currency  # KSH
+                base_currency=wallet_currency,
+                target_currency=incoming_currency
             )
-            exchange_rate = exchange_rate_obj.live_rate  # e.g., 130 KSH per USD
-            converted_amount = amount / exchange_rate  # KSH / (KSH/USD) = USD
+            exchange_rate = exchange_rate_obj.live_rate
+            converted_amount = amount / exchange_rate
         except ExchangeRate.DoesNotExist:
             return Response({'error': 'Exchange rate not available'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -116,6 +122,29 @@ class DepositView(APIView):
         if 'CheckoutRequestID' in stk_response:
             trans.checkout_request_id = stk_response['CheckoutRequestID']
             trans.save()
+
+            # SEND EMAIL TO ADMIN IMMEDIATELY
+            try:
+                send_mail(
+                    subject="New Deposit Request – STK Push Sent",
+                    message=(
+                        f"User: {request.user.username}\n"
+                        f"Email: {request.user.email}\n"
+                        f"Amount: {amount} {incoming_currency.code}\n"
+                        f"Converted: ~{converted_amount:.2f} USD\n"
+                        f"Phone: {mpesa_phone}\n"
+                        f"Account Type: {account_type.title()}\n"
+                        f"Reference: {reference_id}\n"
+                        f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
+                        f"User has been prompted to enter PIN. Awaiting completion."
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[ADMIN_EMAIL],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                logger.error(f"Failed to send admin deposit email for {reference_id}: {e}")
+
             return Response({
                 'message': 'STK Push initiated successfully',
                 'reference_id': reference_id
@@ -125,7 +154,7 @@ class DepositView(APIView):
             trans.description = stk_response.get('error', 'STK Push failed')
             trans.save()
             return Response({'error': 'Failed to initiate STK Push'}, status=status.HTTP_400_BAD_REQUEST)
-
+        
 class WithdrawalOTPView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -208,12 +237,15 @@ class VerifyWithdrawalOTPView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        data = serializer.validated_data
-        code = data['code']
-        transaction_id = data['transaction_id']
+        code = serializer.validated_data['code']
+        transaction_id = serializer.validated_data['transaction_id']
 
         try:
-            trans = WalletTransaction.objects.get(id=transaction_id, wallet__account__user=request.user, status='pending')
+            trans = WalletTransaction.objects.get(
+                id=transaction_id,
+                wallet__account__user=request.user,
+                status='pending'
+            )
             otp = OTPCode.objects.get(
                 user=request.user,
                 code=code,
@@ -227,16 +259,22 @@ class VerifyWithdrawalOTPView(APIView):
             return Response({'error': 'Invalid OTP or transaction'}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
+            # Mark OTP as used
             otp.is_used = True
             otp.save()
+
+            # Deduct balance immediately
             wallet = trans.wallet
             wallet.balance -= trans.amount
             wallet.save()
-            trans.status = 'pending'  # Set to pending for admin approval
+
+            # Update transaction
+            trans.status = 'pending'  # still pending admin approval
             trans.completed_at = timezone.now()
-            trans.description = 'Withdrawal verified and pending admin approval'
+            trans.description = 'Withdrawal Successful'
             trans.save()
 
+            # Log in dashboard
             Transaction.objects.create(
                 account=wallet.account,
                 amount=-trans.amount,
@@ -244,15 +282,45 @@ class VerifyWithdrawalOTPView(APIView):
                 description=f"Pending: {trans.reference_id}"
             )
 
+        # --- SEND EMAIL TO ADMIN ---
+        try:
+            send_mail(
+                subject="Withdrawal Ready for Payout",
+                message=(
+                    f"User: {request.user.username}\n"
+                    f"Email: {request.user.email}\n"
+                    f"Amount: {trans.amount} USD → {trans.converted_amount} KSH\n"
+                    f"Phone: {trans.mpesa_phone}\n"
+                    f"Account: {wallet.account.account_type.title()}\n"
+                    f"Reference: {trans.reference_id}\n"
+                    f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
+                    f"OTP verified. Funds deducted. Please send money via M-Pesa."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[ADMIN_EMAIL],
+                fail_silently=False,
+            )
+        except Exception as e:
+            logger.error(f"Failed to send admin withdrawal email for {trans.reference_id}: {e}")
+
+        # --- SEND USER CONFIRMATION (optional, but clean) ---
         send_mail(
-            "Withdrawal Initiated",
-            f"Hi {request.user.username},\n\nYour withdrawal of {trans.amount} USD ({trans.converted_amount} KSH) from {wallet.account.account_type} account has been initiated and is pending approval.\nRef: {trans.reference_id}",
-            settings.DEFAULT_FROM_EMAIL,
-            [request.user.email],
-            fail_silently=True
+            subject="Withdrawal Initiated",
+            message=(
+                f"Hi {request.user.username},\n\n"
+                f"Your withdrawal of {trans.amount} USD ({trans.converted_amount} KSH)\n"
+                f"has been initiated and is being processed.\n\n"
+                f"Reference: {trans.reference_id}\n"
+                f"You will receive the funds shortly."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[request.user.email],
+            fail_silently=True,
         )
 
-        return Response({'message': 'Withdrawal initiated successfully'})
+        return Response({
+            'message': 'Withdrawal initiated successfully'
+        })
 
 class TransactionListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
