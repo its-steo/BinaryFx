@@ -86,10 +86,19 @@ const handleResendOTP = async () => {
   }
 
   const handleOkay = () => {
-    setShowSuccess(false)
-    onClose()
-    window.location.reload()
-  }
+  setShowSuccess(false);
+
+  // Close modal BEFORE refreshing session
+  onClose();
+
+  // Tell layout & page to refresh session
+  setTimeout(() => {
+    window.dispatchEvent(new Event("session-updated"));
+  }, 100);
+
+  // ❌ Do NOT reload — causes production logout
+};
+
 
   if (showSuccess) {
     return (
