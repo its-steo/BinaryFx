@@ -129,24 +129,27 @@ import os
 import dj_database_url
 
 # ──────────────────────────────────────────────────────────────
-# POSTGRESQL – RENDER PAID TIER (optimized + bulletproof)
+# DATABASE – works on Render build + runtime + local dev
 # ──────────────────────────────────────────────────────────────
-DATABASES = {
-    "default": dj_database_url.parse(
-        os.environ["DATABASE_URL"],     # Render always provides this
-        conn_max_age=0,                 # Still the safest on Render (eliminates 99% of SSL errors)
-        conn_health_checks=True,        # Django validates stale connections
-        ssl_require=True,               # Enforces SSL (required by Render)
-    )
-}
-
-# Optional: fallback for local dev (only used if DATABASE_URL is missing)
-if not os.environ.get("DATABASE_URL"):
-    DATABASES["default"] = {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+if "DATABASE_URL" in os.environ:
+    # Render production (and preview environments)
+    DATABASES = {
+        "default": dj_database_url.parse(
+            os.environ["DATABASE_URL"],
+            conn_max_age=0,
+            conn_health_checks=True,
+            ssl_require=True,
+        )
     }
-
+else:
+    # Local development OR Render build step → fall back to SQLite
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+    
 ASGI_APPLICATION = 'traderiser.asgi.application'
 # Redis Layer (already added from earlier)
 import os
