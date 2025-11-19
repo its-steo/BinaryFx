@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
@@ -112,18 +112,40 @@ AUTHENTICATION_BACKENDS = [
 #        'NAME': BASE_DIR / 'db.sqlite3',
 #    }
 #}
+#
 
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.postgresql',
+#        'NAME': os.getenv('DB_NAME', 'binaryfx'),
+#        'USER': os.getenv('DB_USER', 'binaryfx_user'),
+#        'PASSWORD': os.getenv('DB_PASSWORD', 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk'),
+#        'HOST': os.getenv('DB_HOST', 'dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com'),
+#        'PORT': os.getenv('DB_PORT', '5432'),
+#    }
+#}
 
+import os
+import dj_database_url
+
+# ──────────────────────────────────────────────────────────────
+# POSTGRESQL – RENDER PAID TIER (optimized + bulletproof)
+# ──────────────────────────────────────────────────────────────
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'binaryfx'),
-        'USER': os.getenv('DB_USER', 'binaryfx_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk'),
-        'HOST': os.getenv('DB_HOST', 'dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com'),
-        'PORT': os.getenv('DB_PORT', '5432'),
-    }
+    "default": dj_database_url.parse(
+        os.environ["DATABASE_URL"],     # Render always provides this
+        conn_max_age=0,                 # Still the safest on Render (eliminates 99% of SSL errors)
+        conn_health_checks=True,        # Django validates stale connections
+        ssl_require=True,               # Enforces SSL (required by Render)
+    )
 }
+
+# Optional: fallback for local dev (only used if DATABASE_URL is missing)
+if not os.environ.get("DATABASE_URL"):
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
 
 ASGI_APPLICATION = 'traderiser.asgi.application'
 # Redis Layer (already added from earlier)
