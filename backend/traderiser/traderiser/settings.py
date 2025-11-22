@@ -9,7 +9,6 @@ import dj_database_url
 
 
 
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -127,53 +126,29 @@ AUTHENTICATION_BACKENDS = [
 #    }
 #}
 
-#import os
-#import dj_database_url
-#
-## ──────────────────────────────────────────────────────────────
-## DATABASE – works on Render build + runtime + local dev
-## ──────────────────────────────────────────────────────────────
-#if "DATABASE_URL" in os.environ:
-#    # Render production (and preview environments)
-#    DATABASES = {
-#        "default": dj_database_url.parse(
-#            os.environ["DATABASE_URL"],
-#            conn_max_age=0,
-#            conn_health_checks=True,
-#            ssl_require=True,
-#        )
-#    }
-#else:
-#    # Local development OR Render build step → fall back to SQLite
-#    DATABASES = {
-#        "default": {
-#            "ENGINE": "django.db.backends.sqlite3",
-#            "NAME": BASE_DIR / "db.sqlite3",
-#        }
-#    }
-#   
-
 
 # ──────────────────────────────────────────────────────────────
-# DATABASE – the ONLY way that works reliably on Render
+# DATABASE – works on Render build + runtime + local dev
 # ──────────────────────────────────────────────────────────────
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'binaryfx',
-        'USER': 'binaryfx_user',
-        'PASSWORD': 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk',
-        'HOST': 'dpg-d426i16uk2gs73bb6j70-a',
-        'PORT': '5432',
-        'OPTIONS': {'sslmode': 'require'},
-        'CONN_MAX_AGE': 0,
-        'CONN_HEALTH_CHECKS': True,
+if "DATABASE_URL" in os.environ:
+    # Render production (and preview environments)
+    DATABASES = {
+        "default": dj_database_url.parse(
+            os.environ["DATABASE_URL"],
+            conn_max_age=0,
+            conn_health_checks=True,
+            ssl_require=True,
+        )
     }
-}
-
-
-
+else:
+    # Local development OR Render build step → fall back to SQLite
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+    
 ASGI_APPLICATION = 'traderiser.asgi.application'
 # Redis Layer (already added from earlier)
 import os
