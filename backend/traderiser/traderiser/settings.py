@@ -5,7 +5,6 @@ from decouple import config
 from datetime import timedelta
 from storages.backends.s3boto3 import S3Boto3Storage
 from decouple import config
-import dj_database_url
 
 
 
@@ -14,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = True
+DEBUG = False
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
@@ -106,17 +105,38 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 
-# ─────── PERMANENT RENDER DATABASE FIX ───────
+
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
+#    }
+#}
+#
+
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.postgresql',
+#        'NAME': os.getenv('DB_NAME', 'binaryfx'),
+#        'USER': os.getenv('DB_USER', 'binaryfx_user'),
+#        'PASSWORD': os.getenv('DB_PASSWORD', 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk'),
+#        'HOST': os.getenv('DB_HOST', 'dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com'),
+#        'PORT': os.getenv('DB_PORT', '5432'),
+#    }
+#}
+
+# ─────── FINAL WORKING DATABASE CONFIG FOR RENDER (keeps all your data) ───────
 import dj_database_url
 import os
 
 DATABASES = {
     'default': dj_database_url.config(
-        default='postgresql://binaryfx_user:kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk@dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com/binaryfx'
+        default='postgresql://binaryfx_user:kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk@dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com/binaryfx',
+        conn_max_age=600,
+        ssl_require=True
     )
 }
-
-
+    
 ASGI_APPLICATION = 'traderiser.asgi.application'
 # Redis Layer (already added from earlier)
 import os
