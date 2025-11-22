@@ -159,9 +159,17 @@ AUTHENTICATION_BACKENDS = [
 # ──────────────────────────────────────────────────────────────
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default='sqlite:///' + os.path.join(BASE_DIR, 'db.sqlite3')
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'binaryfx',
+        'USER': 'binaryfx_user',
+        'PASSWORD': 'kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk',
+        'HOST': 'dpg-d426i16uk2gs73bb6j70-a',
+        'PORT': '5432',
+        'OPTIONS': {'sslmode': 'require'},
+        'CONN_MAX_AGE': 0,
+        'CONN_HEALTH_CHECKS': True,
+    }
 }
 
 
