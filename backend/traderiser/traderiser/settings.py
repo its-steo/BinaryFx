@@ -5,6 +5,8 @@ from decouple import config
 from datetime import timedelta
 from storages.backends.s3boto3 import S3Boto3Storage
 from decouple import config
+import dj_database_url
+
 
 
 
@@ -125,31 +127,45 @@ AUTHENTICATION_BACKENDS = [
 #    }
 #}
 
-import os
-import dj_database_url
+#import os
+#import dj_database_url
+#
+## ──────────────────────────────────────────────────────────────
+## DATABASE – works on Render build + runtime + local dev
+## ──────────────────────────────────────────────────────────────
+#if "DATABASE_URL" in os.environ:
+#    # Render production (and preview environments)
+#    DATABASES = {
+#        "default": dj_database_url.parse(
+#            os.environ["DATABASE_URL"],
+#            conn_max_age=0,
+#            conn_health_checks=True,
+#            ssl_require=True,
+#        )
+#    }
+#else:
+#    # Local development OR Render build step → fall back to SQLite
+#    DATABASES = {
+#        "default": {
+#            "ENGINE": "django.db.backends.sqlite3",
+#            "NAME": BASE_DIR / "db.sqlite3",
+#        }
+#    }
+#   
+
 
 # ──────────────────────────────────────────────────────────────
-# DATABASE – works on Render build + runtime + local dev
+# DATABASE – the ONLY way that works reliably on Render
 # ──────────────────────────────────────────────────────────────
-if "DATABASE_URL" in os.environ:
-    # Render production (and preview environments)
-    DATABASES = {
-        "default": dj_database_url.parse(
-            os.environ["DATABASE_URL"],
-            conn_max_age=0,
-            conn_health_checks=True,
-            ssl_require=True,
-        )
-    }
-else:
-    # Local development OR Render build step → fall back to SQLite
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-    
+
+DATABASES = {
+    'default': dj_database_url.config(
+        default='sqlite:///' + os.path.join(BASE_DIR, 'db.sqlite3')
+    )
+}
+
+
+
 ASGI_APPLICATION = 'traderiser.asgi.application'
 # Redis Layer (already added from earlier)
 import os
