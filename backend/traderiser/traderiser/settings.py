@@ -106,6 +106,12 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 
+DATABASES = {
+    'default': dj_database_url.config(
+        default='postgresql://binaryfx_user:kQEUGRYh9T9bQAnYVvvl7TyTIw0E5myk@dpg-d426i16uk2gs73bb6j70-a.oregon-postgres.render.com/binaryfx'
+    )
+}
+
 
 #DATABASES = {
 #    'default': {
@@ -130,25 +136,25 @@ AUTHENTICATION_BACKENDS = [
 # ──────────────────────────────────────────────────────────────
 # DATABASE – works on Render build + runtime + local dev
 # ──────────────────────────────────────────────────────────────
-if "DATABASE_URL" in os.environ:
-    # Render production (and preview environments)
-    DATABASES = {
-        "default": dj_database_url.parse(
-            os.environ["DATABASE_URL"],
-            conn_max_age=0,
-            conn_health_checks=True,
-            ssl_require=True,
-        )
-    }
-else:
-    # Local development OR Render build step → fall back to SQLite
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-    
+#if "DATABASE_URL" in os.environ:
+#    # Render production (and preview environments)
+#    DATABASES = {
+#        "default": dj_database_url.parse(
+#            os.environ["DATABASE_URL"],
+#            conn_max_age=0,
+#            conn_health_checks=True,
+#            ssl_require=True,
+#        )
+#    }
+#else:
+#    # Local development OR Render build step → fall back to SQLite
+#    DATABASES = {
+#        "default": {
+#            "ENGINE": "django.db.backends.sqlite3",
+#            "NAME": BASE_DIR / "db.sqlite3",
+#        }
+#    }
+#    
 ASGI_APPLICATION = 'traderiser.asgi.application'
 # Redis Layer (already added from earlier)
 import os
