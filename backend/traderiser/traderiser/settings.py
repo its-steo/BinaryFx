@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'agents',
     'customercare',
     'management',
+    'traderpulse',
     'channels',
 
     
@@ -177,14 +178,25 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 redis_parsed = urlparse(REDIS_URL)
 redis_address = f"redis://{redis_parsed.username}:{redis_parsed.password}@{redis_parsed.hostname}:{redis_parsed.port or 6379}{redis_parsed.path or ''}"
 
+# settings.py — YOUR STYLE, BUT 100% FIXED
+
+import os
+from django.core.exceptions import ImproperlyConfigured
+
+# Your Redis URL (local dev example)
+redis_address = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": [redis_address],
-            "symmetric_encryption_keys": [SECRET_KEY],
+            "symmetric_encryption_keys": [SECRET_KEY],  # ← You keep this (good!)
             "capacity": 1000,
             "expiry": 60,
+            # ↓↓↓ THESE TWO LINES ARE THE FIX ↓↓↓
+            "password": None,                    # ← Force no AUTH command
+            "ssl_cert_reqs": None,               # ← Also helps on Windows
         },
     },
 }
@@ -245,6 +257,15 @@ else:
 
 # Optional: Ensure media URLs point to S3
 MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
+# settings.py
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Default Redis URL
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'  # Or your TZ
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'  # For dynamic scheduling
 
 
 

@@ -466,10 +466,14 @@ def perform_robot_trade(user_robot):
         )
 
 
+
+from rest_framework import generics
+from django.db import transaction  
+
 class BotLogListView(generics.ListAPIView):
     """
-    GET /api/forex/robot-logs/                → all logs of the user
-    GET /api/forex/robot-logs/?user_robot_id=5 → logs for specific UserRobot
+    GET /api/forex/robot-logs/                → all logs of the user (fetched and deleted after response)
+    GET /api/forex/robot-logs/?user_robot_id=5 → logs for specific UserRobot (fetched and deleted after response)
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = BotLogSerializer
@@ -488,3 +492,15 @@ class BotLogListView(generics.ListAPIView):
                 pass  # ignore invalid ID
 
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        
+        # Wrap the response and deletion in a transaction for safety
+        with transaction.atomic():
+            response = Response(serializer.data)
+            # Delete the fetched logs after serializing (to free DB space)
+            queryset.delete()
+        
+        return response
