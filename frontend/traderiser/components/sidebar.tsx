@@ -142,6 +142,7 @@ export function Sidebar({
             { href: "/profile", label: "Profile", icon: User },
             { href: "/customercare", label: "Customer Care", icon: MessageSquare },
             { href: "/agents", label: "Agent Services", icon: Headset },
+            //{ href: "/tradepulse", label: "TraderPulse Live", icon: MessageSquare },
           ]
         : [
             { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -151,6 +152,7 @@ export function Sidebar({
             { href: "/profile", label: "Profile", icon: User },
             { href: "/customercare", label: "Customer Care", icon: MessageSquare },
             { href: "/agents", label: "Agent Services", icon: Headset },
+            //{ href: "/tradepulse", label: "TraderPulse Live", icon: MessageSquare },
           ]
       : [
           { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -163,6 +165,7 @@ export function Sidebar({
           { href: "/profile", label: "Profile", icon: User },
           { href: "/customercare", label: "Customer Care", icon: MessageSquare },
           { href: "/agents", label: "Agent Services", icon: Headset },
+           { href: "/tradepulse", label: "TraderPulse Live", icon: MessageSquare },
         ]
 
   return (

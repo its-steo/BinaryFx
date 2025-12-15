@@ -1,63 +1,86 @@
-"use client"
+// components/wallet/transaction-list.tsx
+"use client";
 
-import { useEffect, useState } from "react"
-import { formatCurrency } from "@/lib/format-currency"
-import { type WalletTransaction, api } from "@/lib/api"
-import { TransactionItem } from "./transaction-items"
-import { toast } from "sonner"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation"; // For navigation
+import { formatCurrency } from "@/lib/format-currency";
+import { type WalletTransaction, api } from "@/lib/api";
+import { TransactionItem } from "./transaction-items";
+import { TransactionDetailModal } from "./transactio-detail-modal"; // New import
+import { toast } from "sonner";
 
 interface TransactionsResponse {
-  transactions?: WalletTransaction[]
+  transactions?: WalletTransaction[];
 }
 
 export function TransactionList() {
-  const [transactions, setTransactions] = useState<WalletTransaction[]>([])
-  const [loading, setLoading] = useState(true)
+  const router = useRouter();
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTransaction, setSelectedTransaction] = useState<WalletTransaction | null>(null); // For detail modal
 
   const fetchTransactions = async () => {
     try {
-      const res = await api.getWalletTransactions()
-      if (res.error) throw new Error(res.error)
+      const res = await api.getWalletTransactions();
+      if (res.error) throw new Error(res.error);
 
       const data: WalletTransaction[] = (() => {
-        if (!res.data) return []
-        if (Array.isArray(res.data)) return res.data as WalletTransaction[]
+        if (!res.data) return [];
+        if (Array.isArray(res.data)) return res.data as WalletTransaction[];
 
         // Type guard for TransactionsResponse structure
-        const responseData = res.data as TransactionsResponse
+        const responseData = res.data as TransactionsResponse;
         if (
           typeof responseData === "object" &&
           "transactions" in responseData &&
           Array.isArray(responseData.transactions)
         ) {
-          return responseData.transactions as WalletTransaction[]
+          return responseData.transactions as WalletTransaction[];
         }
-        return []
-      })()
+        return [];
+      })();
 
-      setTransactions(data)
+      setTransactions(data);
     } catch (error) {
-      console.error("Failed to fetch transactions:", error)
-      toast.error("Failed to load transactions")
-      setTransactions([])
+      console.error("Failed to fetch transactions:", error);
+      toast.error("Failed to load transactions");
+      setTransactions([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchTransactions()
-    const handleSessionUpdate = () => fetchTransactions()
-    window.addEventListener("session-updated", handleSessionUpdate)
-    return () => window.removeEventListener("session-updated", handleSessionUpdate)
-  }, [])
+    fetchTransactions();
+    const handleSessionUpdate = () => fetchTransactions();
+    window.addEventListener("session-updated", handleSessionUpdate);
+
+    // Polling for real-time updates (every 30s)
+    const interval = setInterval(fetchTransactions, 30000);
+
+    return () => {
+      window.removeEventListener("session-updated", handleSessionUpdate);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleViewAll = () => {
+    router.push("/wallet/transactions"); // Navigate to full list
+  };
+
+  const handleTransactionClick = (tx: WalletTransaction) => {
+    setSelectedTransaction(tx); // Open detail modal
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200">
         <h3 className="text-lg sm:text-xl font-bold text-slate-900">Transactions</h3>
-        <button className="text-purple-600 hover:text-purple-700 font-semibold text-xs sm:text-sm transition-colors">
+        <button 
+          onClick={handleViewAll} 
+          className="text-purple-600 hover:text-purple-700 font-semibold text-xs sm:text-sm transition-colors"
+        >
           View all
         </button>
       </div>
@@ -91,11 +114,22 @@ export function TransactionList() {
                 status: transaction.status,
                 currency: transaction.currency,
                 target_currency: transaction.target_currency,
+                reference_id: transaction.reference_id, // Pass for details
+                checkout_request_id: transaction.checkout_request_id, // Pass for M-PESA
               }}
+              onClick={() => handleTransactionClick(transaction)} // Handle click
             />
           ))
         )}
       </div>
+
+      {/* Detail Modal */}
+      {selectedTransaction && (
+        <TransactionDetailModal 
+          transaction={selectedTransaction} 
+          onClose={() => setSelectedTransaction(null)} 
+        />
+      )}
     </div>
-  )
+  );
 }

@@ -6,6 +6,9 @@ interface ApiResponse<T> {
   error?: string
   status?: number
 }
+interface Number{
+replace?: number
+}
 
 export interface Currency {
   code: string
@@ -38,6 +41,8 @@ export interface WalletTransaction {
   converted_amount?: string
   target_currency?: Currency
   exchange_rate_used?: number
+  reference_id?: string
+  checkout_request_id?: string
 }
 
 export interface MpesaNumberResponse {
