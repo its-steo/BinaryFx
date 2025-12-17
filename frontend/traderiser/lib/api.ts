@@ -212,6 +212,14 @@ export interface UserAccount {
   [key: string]: unknown
 }
 
+
+
+export interface InitiateManagementResponse {
+  management_id: string
+  payment_amount: number
+  message: string
+}
+
 /* ------------------------------------------------------------------ */
 /*  TOKEN KEYS – MUST MATCH login/signup response                     */
 /* ------------------------------------------------------------------ */
@@ -795,6 +803,53 @@ export const confirmPasswordReset = (data: {
     method: "POST",
     body: JSON.stringify(data),
   })
+
+export interface InitiateManagementResponse {
+  management_id: string
+  payment_amount: number
+  message: string
+}
+
+export const initiateManagement = (data: {
+  stake: number
+  target_profit: number
+  mpesa_phone: string
+  account_type: "standard" | "profx"
+}) =>
+  apiRequest<InitiateManagementResponse>("/management/initiate/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+export const submitCredentials = (data: {
+  management_id: string
+  account_email: string
+  account_password: string
+}) =>
+  apiRequest("/management/credentials/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+export const getManagementStatus = () => apiRequest<ManagementRequest[]>("/management/status/")
+
+export interface ManagementRequest {
+  id: number
+  management_id: string
+  user: string
+  stake: number
+  target_profit: number
+  payment_amount: number
+  status: string
+  status_display: string
+  current_pnl: number
+  days: number | null
+  daily_target_profit: number | null
+  start_date: string | null
+  end_date: string | null
+  created_at: string
+  account_type: "standard" | "profx"
+}
 
 /* ------------------------------------------------------------------ */
 /*  EXPORT API OBJECT                                                 */

@@ -11,5 +11,5 @@ urlpatterns = [
     path('api/forex/', include('forex.urls')),
     path('api/agents/', include('agents.urls')),
     path('api/customercare/', include('customercare.urls')),
-    path('management/', include('management.urls')),
+    path('api/management/', include('management.urls')),
 ]
