@@ -5,7 +5,8 @@ from django.db import transaction, close_old_connections
 from django.core.mail import send_mail
 from django.conf import settings
 from management.models import ManagementRequest
-from wallet.models import Wallet, WalletTransaction, Currency
+from wallet.models import Wallet, Currency
+from dashboard.models import Transaction  # Import dashboard Transaction
 from decimal import Decimal
 import random
 import time
@@ -77,30 +78,29 @@ class Command(BaseCommand):
                             wallet.balance += pnl
                             wallet.save()
 
-                            WalletTransaction.objects.create(
-                                wallet=wallet,
-                                transaction_type='deposit' if pnl > 0 else 'withdrawal',
-                                amount=abs(pnl),
-                                currency=usd,
-                                status='completed',
-                                description=f"Live management trade - {req.management_id}"
+                            # Create dashboard Transaction instead of WalletTransaction
+                            Transaction.objects.create(
+                                account=account,
+                                amount=pnl if pnl > 0 else -abs(pnl),
+                                transaction_type='credit' if pnl > 0 else 'debit',
+                                description=f"Management trade {'profit' if pnl > 0 else 'loss'} - {req.management_id}"
                             )
 
                             req.current_pnl += pnl
                             req.save()
 
-                        trades_this_cycle += 1
+                            req_id = req.id
+                            if req_id not in daily_pnl_today:
+                                daily_pnl_today[req_id] = Decimal('0.00')
+                            daily_pnl_today[req_id] += pnl
 
-                        # Track daily PnL for email
-                        req_id = req.id
-                        if req_id not in daily_pnl_today:
-                            daily_pnl_today[req_id] = Decimal('0')
-                        daily_pnl_today[req_id] += pnl
+                            if req_id not in last_daily_email_date:
+                                last_daily_email_date[req_id] = None
+
+                            trades_this_cycle += 1
 
                         # Check if DAILY target reached
-                        if (daily_pnl_today[req_id] >= req.daily_target_profit and 
-                            last_daily_email_date.get(req_id) != today):
-
+                        if daily_pnl_today[req_id] >= req.daily_target_profit and last_daily_email_date.get(req_id) != today:
                             send_mail(
                                 "Daily Target Profit Reached! 📈",
                                 f"Hi {req.user.username},\n\n"

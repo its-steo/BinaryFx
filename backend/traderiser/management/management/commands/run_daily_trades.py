@@ -5,7 +5,8 @@ from django.db import transaction
 from django.core.mail import send_mail
 from django.conf import settings
 from management.models import ManagementRequest
-from wallet.models import Wallet, WalletTransaction, Currency
+from wallet.models import Wallet, Currency
+from dashboard.models import Transaction  # Import dashboard Transaction
 from decimal import Decimal
 import random
 import logging
@@ -55,13 +56,12 @@ class Command(BaseCommand):
                     wallet.balance += daily_pnl
                     wallet.save()
 
-                    WalletTransaction.objects.create(
-                        wallet=wallet,
-                        transaction_type='deposit' if is_win else 'withdrawal',
-                        amount=abs(daily_pnl),
-                        currency=usd,
-                        status='completed',
-                        description=f"Daily management {'profit' if is_win else 'loss'} - {req.management_id}"
+                    # Create dashboard Transaction instead of WalletTransaction
+                    Transaction.objects.create(
+                        account=account,
+                        amount=daily_pnl if daily_pnl > 0 else -abs(daily_pnl),
+                        transaction_type='credit' if daily_pnl > 0 else 'debit',
+                        description=f"Daily management {'profit' if daily_pnl > 0 else 'loss'} - {req.management_id}"
                     )
 
                     req.current_pnl += daily_pnl
