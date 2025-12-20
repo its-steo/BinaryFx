@@ -280,44 +280,87 @@ class PurchaseRobotView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, robot_id):
+        # Ensure user has Pro-FX account
         if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX required'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {'error': 'Pro-FX account required to purchase robots'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         try:
             robot = ForexRobot.objects.get(id=robot_id, is_active=True)
         except ForexRobot.DoesNotExist:
-            return Response({'error': 'Robot not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        # Check if already owned
-        if UserRobot.objects.filter(user=request.user, robot=robot).exists():
-            return Response({'error': 'Already owned'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Deduct price
-        usd = Currency.objects.get(code='USD')
-        account = request.user.accounts.get(account_type='pro-fx')
-        wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
-
-        if wallet.balance < robot.price:
-            return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
-
-        with transaction.atomic():
-            wallet.balance -= robot.price
-            wallet.save()
-
-            user_robot = UserRobot.objects.create(user=request.user, robot=robot)
-
-            Transaction.objects.create(
-                account=account,
-                amount=-robot.price,
-                transaction_type='withdrawal',
-                description=f'Purchased robot: {robot.name}'
+            return Response(
+                {'error': 'Robot not found or inactive'},
+                status=status.HTTP_404_NOT_FOUND
             )
 
-        return Response({
-            'message': 'Robot purchased',
-            'user_robot': UserRobotSerializer(user_robot).data
-        }, status=status.HTTP_201_CREATED)
+        # Prevent duplicate purchase
+        if UserRobot.objects.filter(user=request.user, robot=robot).exists():
+            return Response(
+                {'error': 'You already own this robot'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # Get wallet and effective price
+        try:
+            usd = Currency.objects.get(code='USD')
+            account = request.user.accounts.get(account_type='pro-fx')
+            wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
+        except (Currency.DoesNotExist, Account.DoesNotExist, Wallet.DoesNotExist):
+            return Response(
+                {'error': 'Wallet or account configuration error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        effective_price = robot.effective_price  # Uses discounted_price if set, else price
+
+        if wallet.balance < effective_price:
+            return Response(
+                {'error': 'Insufficient balance'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Perform purchase atomically
+        with transaction.atomic():
+            wallet.balance -= effective_price
+            wallet.save()
+
+            # Create ownership record with default user settings from robot
+            user_robot = UserRobot.objects.create(
+                user=request.user,
+                robot=robot,
+                stake_per_trade=robot.stake_per_trade  # Inherit default stake
+            )
+
+            # Determine transaction description
+            is_discounted = (
+                robot.discounted_price is not None and
+                robot.discounted_price < robot.price
+            )
+            description = (
+                f'Purchased robot: {robot.name}'
+                + (' (discounted)' if is_discounted else '')
+            )
+
+            # Log the purchase transaction
+            Transaction.objects.create(
+                account=account,
+                amount=-effective_price,
+                transaction_type='withdrawal',  # or 'debit' if you prefer consistency
+                description=description
+            )
+
+        # Serialize and return the new UserRobot instance
+        serializer = UserRobotSerializer(user_robot)
+
+        return Response({
+            'message': 'Robot purchased successfully',
+            'user_robot': serializer.data,
+            'purchased_price': effective_price,
+            'discounted': is_discounted
+        }, status=status.HTTP_201_CREATED)
+    
 
 # forex/views.py
 class MyRobotsView(APIView):

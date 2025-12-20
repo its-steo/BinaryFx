@@ -29,6 +29,9 @@ interface Robot {
   id: number
   name: string
   description?: string
+  discounted_price?: number
+  original_price?: number
+  effective_price?: number
   win_rate_normal?: number
   win_rate_sashi?: number
   profit_multiplier?: number
@@ -38,9 +41,13 @@ interface RobotRaw {
   id: number
   name: string
   description?: string
+  discounted_price?: string | number
+  original_price?: string | number
+  effective_price?: string | number
   win_rate_normal?: string | number
   win_rate_sashi?: string | number
   profit_multiplier?: string | number
+  price?:number
 }
 
 interface ForexPair {
@@ -55,6 +62,7 @@ interface UserRobotRaw {
   robot: RobotRaw
   is_running?: boolean
   purchased_at?: string
+  price?:number
 }
 
 interface UserRobot {
@@ -144,10 +152,13 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
               id: r.id,
               name: r.name,
               description: r.description || "No description",
+              discounted_price: r.discounted_price ? Number(r.discounted_price) : undefined,
+              original_price: r.original_price ? Number(r.original_price) : Number(r.price ?? 0),
+              effective_price: r.effective_price ? Number(r.effective_price) : Number(r.price ?? 0),
               win_rate_normal: Number(r.win_rate_normal ?? 0),
               win_rate_sashi: Number(r.win_rate_sashi ?? 0),
               profit_multiplier: Number(r.profit_multiplier ?? 1.0),
-            }))
+            })),
           )
         }
 
@@ -167,6 +178,9 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
             id: ur.robot.id,
             name: ur.robot.name,
             description: ur.robot.description || "No description",
+            discounted_price: ur.robot.discounted_price ? Number(ur.robot.discounted_price) : undefined,
+            original_price: ur.robot.original_price ? Number(ur.robot.original_price) : Number(ur.robot.price ?? 0),
+            effective_price: ur.robot.effective_price ? Number(ur.robot.effective_price) : Number(ur.robot.price ?? 0),
             win_rate_normal: Number(ur.robot.win_rate_normal ?? 0),
             win_rate_sashi: Number(ur.robot.win_rate_sashi ?? 0),
             profit_multiplier: Number(ur.robot.profit_multiplier ?? 1.0),
@@ -197,7 +211,7 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
   /* ------------------------------------------------------------------ */
   const toggleRobot = async (
     userRobotId: number,
-    config?: { stake?: number; pair_id?: number; timeframe?: string }
+    config?: { stake?: number; pair_id?: number; timeframe?: string },
   ) => {
     try {
       const apiConfig: { stake?: number; pair_id?: number; timeframe?: string } = {}
@@ -213,15 +227,13 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
 
       const response: ApiResponse<ToggleResponse> = await api.toggleForexRobot(
         userRobotId,
-        Object.keys(apiConfig).length > 0 ? apiConfig : undefined
+        Object.keys(apiConfig).length > 0 ? apiConfig : undefined,
       )
 
       if (response.data?.is_running !== undefined) {
         const isRunning = response.data.is_running
 
-        setUserRobots((prev) =>
-          prev.map((ur) => (ur.id === userRobotId ? { ...ur, is_running: isRunning } : ur))
-        )
+        setUserRobots((prev) => prev.map((ur) => (ur.id === userRobotId ? { ...ur, is_running: isRunning } : ur)))
         setIsRunning(isRunning)
         toast.success(isRunning ? "Bot started!" : "Bot stopped!")
 
@@ -250,7 +262,8 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
   /* ------------------------------------------------------------------ */
   const fetchLogs = async (userRobotId: number) => {
     try {
-      const res: ApiResponse<RawLog[] | { bot_logs?: RawLog[]; logs?: RawLog[] }> = await api.getForexBotLogsByRobot(userRobotId)
+      const res: ApiResponse<RawLog[] | { bot_logs?: RawLog[]; logs?: RawLog[] }> =
+        await api.getForexBotLogsByRobot(userRobotId)
 
       let rawLogs: RawLog[] = []
       if (Array.isArray(res.data)) {
@@ -269,7 +282,7 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
       try {
         const walletRes: ApiResponse<WalletApiResponse> = await api.getWallets()
         const proFxWallet = walletRes.data?.wallets.find(
-          (w) => w.account_type === "pro-fx" && w.wallet_type === "main" && w.currency.code === "USD"
+          (w) => w.account_type === "pro-fx" && w.wallet_type === "main" && w.currency.code === "USD",
         )
         currentBalance = proFxWallet ? Number(proFxWallet.balance) || 0 : 0
       } catch (e) {

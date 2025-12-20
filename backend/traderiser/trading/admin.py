@@ -20,12 +20,14 @@ class TradeTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Robot)
 class RobotAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'win_rate')
+    list_display = ('name', 'price', 'discounted_price', 'effective_price', 'win_rate')
     search_fields = ('name',)
+    readonly_fields = ('effective_price',)  # Just to display it nicely
+
 
 @admin.register(UserRobot)
 class UserRobotAdmin(admin.ModelAdmin):
-    list_display = ('user', 'robot', 'purchased_at')
+    list_display = ('user', 'robot', 'purchased_at', 'purchased_price')
     list_filter = ('purchased_at',)
     search_fields = ('user__username', 'robot__name')
 

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { toast } from "sonner"            // <-- global toast
+import { toast } from "sonner" // <-- global toast
 import { api } from "@/lib/api"
 import { formatPrice } from "@/lib/format-currency"
 
@@ -14,8 +14,12 @@ interface UserRobot {
     name: string
     description: string
     price: string | number
+    discounted_price?: string | number | null
+    original_price?: string | number
+    effective_price?: string | number
   }
   purchased_at: string | null
+  purchased_price?: string | number | null
 }
 
 export function UserRobots() {
@@ -50,36 +54,61 @@ export function UserRobots() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {userRobots.map((userRobot) => (
-        <div
-          key={userRobot.id}
-          className="rounded-2xl p-6 bg-white/10 backdrop-blur-md border border-white/20"
-        >
-          <h3 className="text-lg font-bold text-white mb-2">{userRobot.robot.name}</h3>
-          <p className="text-sm text-white/60 mb-4">{userRobot.robot.description}</p>
+      {userRobots.map((userRobot) => {
+        const purchasedPrice = userRobot.purchased_price
+          ? Number(userRobot.purchased_price)
+          : userRobot.robot.effective_price
+            ? Number(userRobot.robot.effective_price)
+            : Number(userRobot.robot.price)
 
-          <div className="space-y-3 pt-4 border-t border-white/20">
-            <div className="flex justify-between">
-              <span className="text-sm text-white/60">Price</span>
-              <span className="text-sm font-bold text-white">
-                {formatPrice(userRobot.robot.price)}
-              </span>
+        const originalPrice = userRobot.robot.original_price
+          ? Number(userRobot.robot.original_price)
+          : Number(userRobot.robot.price)
+
+        const wasPurchasedAtDiscount = purchasedPrice < originalPrice
+
+        return (
+          <div
+            key={userRobot.id}
+            className="rounded-2xl p-6 bg-white/10 backdrop-blur-md border border-white/20 relative overflow-hidden"
+          >
+            {wasPurchasedAtDiscount && (
+              <div className="absolute top-3 right-3">
+                <div className="bg-gradient-to-r from-red-600 to-green-600 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-md">
+                  🎄 Holiday Deal
+                </div>
+              </div>
+            )}
+
+            <h3 className="text-lg font-bold text-white mb-2">{userRobot.robot.name}</h3>
+            <p className="text-sm text-white/60 mb-4">{userRobot.robot.description}</p>
+
+            <div className="space-y-3 pt-4 border-t border-white/20">
+              <div className="flex justify-between">
+                <span className="text-sm text-white/60">{wasPurchasedAtDiscount ? "Purchased Price" : "Price"}</span>
+                <div className="flex flex-col items-end">
+                  {wasPurchasedAtDiscount && (
+                    <span className="text-xs text-white/40 line-through">{formatPrice(originalPrice)}</span>
+                  )}
+                  <span className={`text-sm font-bold ${wasPurchasedAtDiscount ? "text-green-400" : "text-white"}`}>
+                    {formatPrice(purchasedPrice)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-white/60">Purchased</span>
+                <span className="text-sm font-bold text-white">
+                  {userRobot.purchased_at
+                    ? new Date(userRobot.purchased_at).toLocaleDateString()
+                    : "Available for Demo"}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-white/60">Purchased</span>
-              <span className="text-sm font-bold text-white">
-                {userRobot.purchased_at
-                  ? new Date(userRobot.purchased_at).toLocaleDateString()
-                  : "Available for Demo"}
-              </span>
-            </div>
+
+            <Button className="w-full mt-6 bg-pink-500 hover:bg-pink-600 text-white">Use Robot</Button>
           </div>
-
-          <Button className="w-full mt-6 bg-pink-500 hover:bg-pink-600 text-white">
-            Use Robot
-          </Button>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

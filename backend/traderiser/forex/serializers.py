@@ -22,13 +22,18 @@ class ForexTradeSerializer(serializers.ModelSerializer):
 
 class ForexRobotSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    effective_price = serializers.SerializerMethodField()
+    original_price = serializers.ReadOnlyField(source='price')  # For strike-through on frontend
 
     class Meta:
         model = ForexRobot
-        fields = '__all__'
+        fields = '__all__'  # Or explicitly list with 'effective_price', 'original_price'
 
     def get_image_url(self, obj):
         return obj.image_url
+
+    def get_effective_price(self, obj):
+        return obj.effective_price
 
 class UserRobotSerializer(serializers.ModelSerializer):
     robot = ForexRobotSerializer(read_only=True)
