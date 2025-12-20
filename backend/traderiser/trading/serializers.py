@@ -5,16 +5,24 @@ from django.conf import settings
 
 class RobotSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
+    effective_price = serializers.SerializerMethodField()
+    original_price = serializers.ReadOnlyField(source='price')  # Useful for showing strike-through on frontend
 
     def get_image(self, obj):
         if obj.image:
-            # Ensure full S3 URL
             return f"{settings.MEDIA_URL}{obj.image}"
         return None
 
+    def get_effective_price(self, obj):
+        return obj.effective_price
+
     class Meta:
         model = Robot
-        fields = ['id', 'name', 'description', 'price', 'available_for_demo', 'image', 'win_rate']
+        fields = [
+            'id', 'name', 'description', 'price', 'original_price',
+            'discounted_price', 'effective_price', 'available_for_demo',
+            'image', 'win_rate'
+        ]
 
 class MarketTypeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -44,7 +52,7 @@ class UserRobotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserRobot
-        fields = ['id', 'robot', 'purchased_at']
+        fields = ['id', 'robot', 'purchased_at', 'purchased_price']
 
 class TradeSerializer(serializers.ModelSerializer):
     market = MarketSerializer(read_only=True)

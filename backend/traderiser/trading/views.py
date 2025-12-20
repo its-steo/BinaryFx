@@ -40,59 +40,73 @@ class RobotListView(APIView):
 class PurchaseRobotView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, robot_id):  # Add robot_id parameter
+    def post(self, request, robot_id):
         account_type = request.data.get('account_type', 'standard')
         try:
             robot = Robot.objects.get(id=robot_id)
             account = Account.objects.get(user=request.user, account_type=account_type)
+            effective_price = robot.effective_price  # ← This respects discount
+
             if account.account_type == 'demo':
                 if robot.available_for_demo:
-                    UserRobot.objects.get_or_create(user=request.user, robot=robot)
+                    user_robot, created = UserRobot.objects.get_or_create(user=request.user, robot=robot)
+                    if created:
+                        user_robot.purchased_price = Decimal('0.00')
+                        user_robot.save()
                     return Response({'message': 'Robot assigned for demo use'}, status=status.HTTP_200_OK)
                 return Response({'error': 'This robot is not available for demo accounts'}, status=status.HTTP_400_BAD_REQUEST)
-            if account.balance < robot.price:
+
+            # Real account purchase
+            if account.balance < effective_price:
                 return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
-            account.balance -= robot.price
+
+            account.balance -= effective_price
             account.save()
+
+            is_discounted = robot.discounted_price is not None and robot.discounted_price < robot.price
+            description = f'Purchased robot: {robot.name}' + (' (discounted)' if is_discounted else '')
+
             Transaction.objects.create(
                 account=account,
-                amount=-robot.price,
+                amount=-effective_price,
                 transaction_type='debit',
-                description=f'Purchased robot: {robot.name}'
+                description=description
             )
-            UserRobot.objects.create(user=request.user, robot=robot)
+
+            user_robot = UserRobot.objects.create(user=request.user, robot=robot)
+            user_robot.purchased_price = effective_price
+            user_robot.save()
+
             return Response({'message': 'Robot purchased successfully'}, status=status.HTTP_201_CREATED)
+
         except Robot.DoesNotExist:
             return Response({'error': 'Robot not found'}, status=status.HTTP_404_NOT_FOUND)
         except Account.DoesNotExist:
             return Response({'error': 'Account not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-# trading/views.py → replace ONLY the UserRobotListView
+
+
+# Inside UserRobotListView (only small addition for demo fake entries)
 class UserRobotListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-
-        # 1. Check if user is in DEMO mode
         is_demo = Account.objects.filter(user=user, account_type='demo').exists()
 
         if is_demo:
-            # DEMO: Show ALL robots with available_for_demo=True
-            # (even if not purchased — they get fake UserRobot with purchased_at=None)
             demo_robots = Robot.objects.filter(available_for_demo=True)
             fake_entries = []
             fake_id = UserRobot.objects.aggregate(Max('id'))['id__max'] or 0
             fake_id += 1
 
             for robot in demo_robots:
-                # Only create fake if not already owned
                 if not UserRobot.objects.filter(user=user, robot=robot).exists():
                     fake = UserRobot(
                         id=fake_id,
                         user=user,
                         robot=robot,
-                        purchased_at=None
+                        purchased_at=None,
+                        purchased_price=Decimal('0.00')  # ← Added
                     )
                     fake_entries.append(fake)
                     fake_id += 1
@@ -101,11 +115,9 @@ class UserRobotListView(APIView):
             combined = list(real_entries) + fake_entries
             serializer = UserRobotSerializer(combined, many=True)
         else:
-            # REAL ACCOUNT: ONLY show purchased robots
             owned = UserRobot.objects.filter(user=user)
             serializer = UserRobotSerializer(owned, many=True)
 
-        return Response(serializer.data)
         return Response(serializer.data)
         
 # trading/views.py (relevant part: PlaceTradeView)

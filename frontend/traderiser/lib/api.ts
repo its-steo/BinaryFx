@@ -71,7 +71,13 @@ export interface ForexRobot {
   created_at: string
   image_url?: string
   image?: string
+  discounted_price?:number
+  effective_price?:number
+  original_price?:number
 }
+ export interface RobotRaw{
+  price?:number
+ }
 
 export interface UserRobot {
   id: number

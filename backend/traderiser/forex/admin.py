@@ -17,11 +17,11 @@ class ForexTradeAdmin(admin.ModelAdmin):
 
 @admin.register(ForexRobot)
 class ForexRobotAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'stake_per_trade', 'profit_multiplier', 'best_markets', 'is_active', 'image_preview')
-    list_editable = ('profit_multiplier',)  # Edit inline
+    list_display = ('name', 'price', 'discounted_price', 'effective_price', 'stake_per_trade', 'profit_multiplier', 'best_markets', 'is_active', 'image_preview')
+    list_editable = ('profit_multiplier', 'discounted_price')  # Edit inline
     list_filter = ('best_markets', 'is_active')
     search_fields = ('name',)
-    readonly_fields = ('image_preview',)
+    readonly_fields = ('image_preview', 'effective_price')
 
     def image_preview(self, obj):
         if obj.image:
@@ -31,6 +31,9 @@ class ForexRobotAdmin(admin.ModelAdmin):
             )
         return "(No image)"
     image_preview.short_description = "Image"
+    def effective_price(self, obj):
+        return obj.effective_price
+    effective_price.short_description = "Effective Price"
 
 @admin.register(UserRobot)
 class UserRobotAdmin(admin.ModelAdmin):

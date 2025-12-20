@@ -34,26 +34,45 @@ class TradeType(models.Model):
 
 class Robot(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    image = models.ImageField(upload_to='robots/', storage=S3Boto3Storage(), null=True, blank=True)  # S3 storage
+    image = models.ImageField(upload_to='robots/', storage=S3Boto3Storage(), null=True, blank=True)
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    available_for_demo = models.BooleanField(default=True)  # Allow demo users to use without purchase
+    discounted_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )  # If set, this is the active price
+    available_for_demo = models.BooleanField(default=True)
     win_rate = models.IntegerField(default=50, validators=[MinValueValidator(0), MaxValueValidator(100)])
 
     def __str__(self):
         return self.name
 
+    @property
+    def effective_price(self):
+        """Returns discounted_price if set, otherwise original price"""
+        return self.discounted_price if self.discounted_price is not None else self.price
+
+
 class UserRobot(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='user_robots')
     robot = models.ForeignKey(Robot, on_delete=models.PROTECT)
     purchased_at = models.DateTimeField(auto_now_add=True)
+    purchased_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )  # Records the exact price paid at purchase time
 
     class Meta:
         unique_together = ('user', 'robot')
 
     def __str__(self):
         return f"{self.user.username} - {self.robot.name}"
-
+    
 class TradingSetting(models.Model):
     martingale_multiplier = models.PositiveIntegerField(default=2)
 

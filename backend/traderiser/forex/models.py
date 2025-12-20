@@ -5,6 +5,7 @@ from django.utils import timezone
 from accounts.models import Account, User
 from wallet.models import Wallet, Currency
 from dashboard.models import Transaction
+from django.core.validators import MinValueValidator, MaxValueValidator
 from storages.backends.s3boto3 import S3Boto3Storage
 import logging
 
@@ -218,11 +219,24 @@ class ForexRobot(models.Model):
         null=True
     )
     description = models.TextField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=10, decimal_places=2)  # Original full price
+    discounted_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text="If set, this discounted price will be used instead of the original price."
+    )
     best_markets = models.CharField(max_length=20, choices=ROBOT_MARKETS)
-    win_rate_sashi = models.IntegerField(default=90)
-    win_rate_normal = models.IntegerField(default=10)
-    stake_per_trade = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('10.00'))
+    win_rate_sashi = models.IntegerField(default=90, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    win_rate_normal = models.IntegerField(default=10, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    stake_per_trade = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('10.00'),
+        help_text="Default stake per trade (can be overridden by user)"
+    )
     
     # Profit multiplier
     profit_multiplier = models.DecimalField(
@@ -244,6 +258,14 @@ class ForexRobot(models.Model):
             return self.image.url
         return None
 
+    @property
+    def effective_price(self):
+        """
+        Returns the active price for purchase:
+        - discounted_price if set and not None
+        - otherwise the original price
+        """
+        return self.discounted_price if self.discounted_price is not None else self.price
 
 class UserRobot(models.Model):
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='robots')
