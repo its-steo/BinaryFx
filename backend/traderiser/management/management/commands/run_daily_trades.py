@@ -1,4 +1,5 @@
 # management/management/commands/run_daily_trades.py
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.db import transaction
@@ -6,7 +7,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from management.models import ManagementRequest
 from wallet.models import Wallet, Currency
-from dashboard.models import Transaction  # Import dashboard Transaction
+from dashboard.models import Transaction
 from decimal import Decimal
 import random
 import logging
@@ -14,15 +15,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
-    help = 'Simulate daily trading profit/loss for active management accounts'
+    help = 'Simulate one full day of trading with realistic small PnL (±2 to ±10)'
 
     def handle(self, *args, **options):
         today = timezone.now().date()
-        active_requests = ManagementRequest.objects.filter(
-            status='active',
-            start_date__lte=today,
-            end_date__gte=today
-        )
+        active_requests = ManagementRequest.objects.filter(status='active')
 
         if not active_requests.exists():
             self.stdout.write("No active management requests today.")
@@ -42,77 +39,87 @@ class Command(BaseCommand):
                 account = req.user.accounts.get(account_type=req.account_type)
                 wallet = account.wallets.get(wallet_type='main', currency=usd)
 
-                is_sashi = getattr(req.user, 'is_sashi', False)
-                win_rate = 0.80 if is_sashi else 0.70
-                is_win = random.random() < win_rate
-
-                multiplier = random.uniform(1.0, 1.8) if is_win else random.uniform(0.5, 0.9)
-                daily_pnl = req.daily_stake * Decimal(str(multiplier))
-                if not is_win:
-                    daily_pnl = -daily_pnl
-                daily_pnl = daily_pnl.quantize(Decimal('0.01'))
-
-                with transaction.atomic():
-                    wallet.balance += daily_pnl
-                    wallet.save()
-
-                    # Create dashboard Transaction instead of WalletTransaction
-                    Transaction.objects.create(
-                        account=account,
-                        amount=daily_pnl if daily_pnl > 0 else -abs(daily_pnl),
-                        transaction_type='credit' if daily_pnl > 0 else 'debit',
-                        description=f"Daily management {'profit' if daily_pnl > 0 else 'loss'} - {req.management_id}"
-                    )
-
-                    req.current_pnl += daily_pnl
+                if wallet.balance <= Decimal('0.00'):
+                    req.status = 'failed'
+                    total_loss = -req.current_pnl if req.current_pnl < 0 else Decimal('0.00')
                     req.save()
+                    send_mail(
+                        "Account Management Update – Loss Incurred",
+                        f"Hi {req.user.username},\n\n"
+                        f"Oops, we made a loss of ${total_loss:.2f}. Let's try again another time.\n\n"
+                        f"Management ID: {req.management_id}\n"
+                        f"Account Type: {req.get_account_type_display()}\n\n"
+                        f"TradeRiser Team",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [req.user.email],
+                        fail_silently=False,
+                    )
+                    self.stdout.write(self.style.WARNING(f"FAILED (zero balance): {req.management_id}"))
+                    continue
 
-                    # Check if target reached
-                    if req.current_pnl >= req.target_profit:
-                        req.status = 'completed'
-                        req.save()
-                        completed_today.append(req)
-                        self.stdout.write(
-                            self.style.SUCCESS(f"🎯 TARGET REACHED & COMPLETED: {req.management_id}")
+                daily_pnl = Decimal('0.00')
+                num_trades_today = random.randint(15, 30)  # Realistic number of small trades per day
+
+                for _ in range(num_trades_today):
+                    if wallet.balance <= Decimal('0.00'):
+                        break
+
+                    base_amount = Decimal(random.randint(2, 10))
+
+                    is_sashi = getattr(req.user, 'is_sashi', False)
+                    win_rate = 1.0 if is_sashi else 0.10
+                    is_win = random.random() < win_rate
+
+                    pnl = base_amount if (is_sashi or is_win) else -base_amount
+
+                    # Cap to not exceed target
+                    remaining = req.target_profit - (req.current_pnl + daily_pnl)
+                    if pnl > remaining > 0:
+                        pnl = remaining
+
+                    daily_pnl += pnl
+
+                    with transaction.atomic():
+                        wallet.balance += pnl
+                        wallet.save()
+                        Transaction.objects.create(
+                            account=account,
+                            amount=pnl if pnl > 0 else -abs(pnl),
+                            transaction_type='credit' if pnl > 0 else 'debit',
+                            description=f"Daily management {'profit' if pnl > 0 else 'loss'} ({abs(pnl)}) - {req.management_id}"
                         )
+
+                req.current_pnl += daily_pnl
+                req.save()
+
+                if req.current_pnl >= req.target_profit:
+                    req.status = 'completed'
+                    req.save()
+                    completed_today.append(req)
 
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"Processed {req.management_id}: {'+' if daily_pnl > 0 else ''}{daily_pnl} USD | Total PnL: ${req.current_pnl}"
+                        f"{req.management_id}: Daily {'+' if daily_pnl > 0 else ''}{daily_pnl} | Total PnL: ${req.current_pnl}"
                     )
                 )
                 processed += 1
 
             except Exception as e:
-                logger.error(f"Error processing {req.management_id}: {e}")
-                self.stdout.write(self.style.ERROR(f"Failed {req.management_id}: {e}"))
+                logger.error(f"Error on {req.management_id}: {e}")
 
-        # Send completion emails
+        # Completion emails
         for req in completed_today:
-            try:
-                send_mail(
-                    "🎉 Account Management Target Achieved!",
-                    f"Hi {req.user.username},\n\n"
-                    f"Congratulations! Your account management has successfully reached the target profit.\n\n"
-                    f"Management ID: {req.management_id}\n"
-                    f"Account Type: {req.get_account_type_display()}\n"
-                    f"Target Profit: ${req.target_profit}\n"
-                    f"Final PnL: ${req.current_pnl}\n"
-                    f"Duration: {req.days} days\n"
-                    f"Start Date: {req.start_date}\n"
-                    f"End Date: {req.end_date}\n\n"
-                    f"Your profits are now available in your wallet.\n"
-                    f"Thank you for trusting us!\n\n"
-                    f"Best regards,\nTradeRiser Team",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [req.user.email],
-                    fail_silently=False,
-                )
-                self.stdout.write(self.style.SUCCESS(f"Completion email sent to {req.user.email}"))
-            except Exception as e:
-                logger.error(f"Failed to send completion email for {req.management_id}: {e}")
-                self.stdout.write(self.style.WARNING(f"Email failed for {req.management_id}"))
+            send_mail(
+                "🎉 Management Target Achieved!",
+                f"Hi {req.user.username},\n\n"
+                f"CONGRATULATIONS! Your target profit has been reached.\n\n"
+                f"Management ID: {req.management_id}\n"
+                f"Final Profit: ${req.current_pnl:.2f}\n"
+                f"Target: ${req.target_profit}\n\n"
+                f"Profits available now.\nThank you!\n\nTradeRiser Team",
+                settings.DEFAULT_FROM_EMAIL,
+                [req.user.email],
+                fail_silently=False,
+            )
 
-        self.stdout.write(
-            self.style.SUCCESS(f"Daily trades completed: {processed} processed, {len(completed_today)} targets reached today.")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Done: {processed} processed, {len(completed_today)} completed today."))
