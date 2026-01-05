@@ -1,6 +1,6 @@
 # trading/serializers.py
 from rest_framework import serializers
-from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade
+from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal
 from django.conf import settings
 
 class RobotSerializer(serializers.ModelSerializer):
@@ -63,3 +63,18 @@ class TradeSerializer(serializers.ModelSerializer):
         model = Trade
         fields = '__all__'
         read_only_fields = ['user', 'is_win', 'profit', 'timestamp', 'session_profit_before']
+
+class SignalSerializer(serializers.ModelSerializer):
+    market = MarketSerializer(read_only=True)
+    timeframe = serializers.SerializerMethodField()
+
+    def get_timeframe(self, obj):
+        return "1 minute"  # Always show as 1-minute to users
+
+    class Meta:
+        model = Signal
+        fields = [
+            'id', 'market', 'direction', 'probability',
+            'take_profit', 'stop_loss', 'generated_at', 'timeframe',
+            'strength', 'current_price'  # Added
+        ]

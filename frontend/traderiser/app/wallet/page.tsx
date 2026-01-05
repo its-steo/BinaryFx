@@ -9,6 +9,8 @@ import { TransactionList } from "@/components/wallet/transaction-list";
 import { DepositModal } from "@/components/wallet/deposit-modal";
 import { WithdrawModal } from "@/components/wallet/withdraw-modal";
 import { VerifyWithdrawalModal } from "@/components/wallet/verify-withdrawal-modal";
+import { TransferModal } from "@/components/wallet/transfer-modal";  // NEW
+import { VerifyTransferModal } from "@/components/wallet/verify-transfer-modal";  // NEW
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -37,6 +39,9 @@ export default function Page() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState<string>("standard");
+  const [showTransferModal, setShowTransferModal] = useState(false);  // NEW
+  const [showVerifyTransferModal, setShowVerifyTransferModal] = useState(false);  // NEW
+  const [selectedTransferId, setSelectedTransferId] = useState<string>("");  // NEW
 
   useEffect(() => {
     const storedAccountType = localStorage.getItem("account_type") || "standard";
@@ -77,7 +82,7 @@ export default function Page() {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { isActive: showDepositModal || showWithdrawModal || showVerifyModal } }));
 
     return () => window.removeEventListener("session-updated", handleSessionUpdate);
-  }, [router, showDepositModal, showWithdrawModal, showVerifyModal]);
+  }, [router, showDepositModal, showWithdrawModal, showVerifyModal , showTransferModal , showVerifyTransferModal]);
 
   const dismissMessage = () => {
     setMessage(null);
@@ -96,6 +101,7 @@ export default function Page() {
           <ActionButtons
             onDeposit={() => setShowDepositModal(true)}
             onWithdraw={() => setShowWithdrawModal(true)}
+            onTransfer={() => setShowTransferModal(true)}
           />
           <TransactionList />
           {showDepositModal && (
@@ -121,6 +127,26 @@ export default function Page() {
               onSetMessage={setMessage}
             />
           )}
+          {showTransferModal && (  // NEW: Render TransferModal
+        <TransferModal
+          onClose={() => setShowTransferModal(false)}
+          onSuccess={(txId?: string) => {
+            setShowTransferModal(false);
+            if (txId) {
+              setSelectedTransferId(txId);
+            }
+            setShowVerifyTransferModal(true);
+          }}
+          onSetMessage={setMessage}
+        />
+      )}
+      {showVerifyTransferModal && (  // NEW: Render VerifyTransferModal
+        <VerifyTransferModal
+          transactionId={selectedTransferId}
+          onClose={() => setShowVerifyTransferModal(false)}
+          onSetMessage={setMessage}
+        />
+      )}
         </div>
       </main>
 

@@ -281,7 +281,7 @@ export default function FxProRobotsPage() {
                       {hasDiscount && (
                         <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-red-600 to-green-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg animate-pulse">
                           <Gift className="w-3.5 h-3.5" />
-                          <span>{discountPercent}% OFF</span>
+                          <span>New Year Deal {discountPercent}% OFF</span>
                           <Sparkles className="w-3 h-3" />
                         </div>
                       )}
@@ -368,7 +368,7 @@ export default function FxProRobotsPage() {
                       {wasPurchasedOnSale && (
                         <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-red-600/80 to-green-600/80 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
                           <Gift className="w-3 h-3" />
-                          <span>Holiday Deal</span>
+                          <span>New Year 2026 Deal</span>
                         </div>
                       )}
 

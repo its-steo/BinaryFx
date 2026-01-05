@@ -100,9 +100,24 @@ class Trade(models.Model):
     used_robot = models.ForeignKey(Robot, on_delete=models.SET_NULL, null=True, blank=True)
     session_profit_before = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     is_demo = models.BooleanField(default=False)  # Flag for demo trades
+    is_copied = models.BooleanField(default=False)
     entry_spot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Added
     exit_spot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)   # Added
     current_spot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True) # Added
 
     def __str__(self):
         return f"{self.user.username} - {self.market.name} - {self.direction} - {'Win' if self.is_win else 'Loss'}"
+
+class Signal(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='signals')
+    market = models.ForeignKey(Market, on_delete=models.PROTECT)
+    direction = models.CharField(max_length=10, choices=Trade.DIRECTIONS)  # Reuse from Trade
+    probability = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(100)])
+    take_profit = models.DecimalField(max_digits=12, decimal_places=5)
+    stop_loss = models.DecimalField(max_digits=12, decimal_places=5)
+    generated_at = models.DateTimeField(auto_now_add=True)
+    strength = models.FloatField(default=0.0)
+    current_price = models.DecimalField(max_digits=12, decimal_places=5, default=Decimal('0.00000'))
+
+    def __str__(self):
+        return f"{self.user.username} - {self.market.name} - {self.direction} - Prob: {self.probability}%"

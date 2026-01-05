@@ -3,12 +3,14 @@ import random
 import string
 import json
 import logging
-from decimal import Decimal
+import uuid
+from decimal import Decimal,InvalidOperation
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 from django.http import JsonResponse
 from django.db import transaction
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -17,7 +19,7 @@ from .serializers import (
     WalletSerializer, WalletTransactionSerializer, MpesaNumberSerializer,
     OTPRequestSerializer, OTPVerifySerializer
 )
-from accounts.models import Account
+from accounts.models import Account,User
 from dashboard.models import Transaction
 from .payment import PaymentClient
 import logging
@@ -32,6 +34,9 @@ def generate_reference_id(length: int = 12) -> str:
 def generate_otp(length: int = 6) -> str:
     """Generate a numeric OTP of given length."""
     return ''.join(random.choices(string.digits, k=length))
+
+def generate_transfer_reference():
+    return f"TR-{uuid.uuid4().hex[:12].upper()}"
 
 class WalletListView(APIView):
     def get(self, request):
@@ -466,3 +471,199 @@ class ResendOTPView(APIView):
             )
 
         return Response({'message': 'New OTP sent to your email.'}, status=status.HTTP_200_OK)
+    
+class InitiateTransferView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        amount = request.data.get('amount')
+        sender_account_type = request.data.get('sender_account_type', 'standard').lower()
+        recipient_email = request.data.get('recipient_email')
+        recipient_account_type = request.data.get('recipient_account_type', 'standard').lower()
+
+        # Allowed account types - pro-fx fully supported
+        ALLOWED_ACCOUNT_TYPES = {'standard', 'premium', 'business', 'pro-fx'}
+
+        if sender_account_type not in ALLOWED_ACCOUNT_TYPES:
+            return Response({'error': 'Invalid sender account type'}, status=status.HTTP_400_BAD_REQUEST)
+        if recipient_account_type not in ALLOWED_ACCOUNT_TYPES:
+            return Response({'error': 'Invalid recipient account type'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = Decimal(str(amount))
+            if amount <= 0:
+                return Response({'error': 'Amount must be greater than zero'}, status=status.HTTP_400_BAD_REQUEST)
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'Invalid amount format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not recipient_email:
+            return Response({'error': 'Recipient email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            recipient_user = User.objects.get(email__iexact=recipient_email.strip())
+            if recipient_user == request.user:
+                return Response({'error': 'Cannot transfer to yourself'}, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return Response({'error': 'Recipient user not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Auto-create Account objects if they don't exist (critical for pro-fx)
+        sender_account, _ = Account.objects.get_or_create(
+            user=request.user,
+            account_type=sender_account_type
+        )
+        recipient_account, _ = Account.objects.get_or_create(
+            user=recipient_user,
+            account_type=recipient_account_type
+        )
+
+        try:
+            # Lock sender's main USD wallet to prevent concurrent spending
+            sender_wallet = Wallet.objects.select_for_update().get(
+                account=sender_account,
+                wallet_type='main',
+                currency__code='USD'
+            )
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Your main USD wallet not found. Contact support.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if sender_wallet.balance < amount:
+            return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            recipient_wallet = Wallet.objects.get(
+                account=recipient_account,
+                wallet_type='main',
+                currency__code='USD'
+            )
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Recipient wallet not available'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reference_id = generate_transfer_reference()
+
+        with transaction.atomic():
+            # Create transfer_out (sender)
+            transfer_out = WalletTransaction.objects.create(
+                wallet=sender_wallet,
+                transaction_type='transfer_out',
+                amount=amount,
+                currency=sender_wallet.currency,
+                status='pending',
+                reference_id=reference_id,
+                description=f"Transfer to {recipient_user.username} ({recipient_account_type})"
+            )
+
+            # Create transfer_in (receiver)
+            transfer_in = WalletTransaction.objects.create(
+                wallet=recipient_wallet,
+                transaction_type='transfer_in',
+                amount=amount,
+                currency=recipient_wallet.currency,
+                converted_amount=amount,  # USD to USD
+                target_currency=recipient_wallet.currency,
+                status='pending',
+                reference_id=reference_id,
+                description=f"Transfer from {request.user.username} ({sender_account_type})"
+            )
+
+            # Generate and save OTP
+            otp = OTPCode.objects.create(
+                user=request.user,
+                code=generate_otp(),
+                purpose='transfer',
+                transaction=transfer_out,
+                expires_at=timezone.now() + timezone.timedelta(minutes=5)
+            )
+
+            # Send OTP via email
+            try:
+                send_mail(
+                    "Your Transfer OTP Code",
+                    f"Hi {request.user.username},\n\n"
+                    f"Your OTP for transferring ${amount} USD (Ref: {reference_id}) is:\n\n"
+                    f"{otp.code}\n\n"
+                    f"This code expires in 5 minutes.\n"
+                    f"If you didn't initiate this, contact support immediately.\n\n"
+                    f"Thank you,\nTradeRiser Team",
+                    settings.DEFAULT_FROM_EMAIL,
+                    [request.user.email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                logger.error(f"Failed to send transfer OTP email: {str(e)}")
+                return Response({'error': 'Failed to send OTP. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            'message': 'Transfer initiated successfully. Check your email for OTP.',
+            'transaction_id': transfer_out.id,
+            'reference_id': reference_id,
+            'amount': str(amount)
+        }, status=status.HTTP_200_OK)
+
+
+class VerifyTransferOTPView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        otp_code = request.data.get('otp')
+        transaction_id = request.data.get('transaction_id')
+
+        if not otp_code or not transaction_id:
+            return Response({'error': 'OTP and transaction ID are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            transaction_id = int(transaction_id)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid transaction ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            transfer_out = WalletTransaction.objects.select_related('wallet__account__user').get(
+                id=transaction_id,
+                wallet__account__user=request.user,
+                transaction_type='transfer_out',
+                status='pending'
+            )
+            otp_obj = OTPCode.objects.get(
+                user=request.user,
+                purpose='transfer',
+                transaction=transfer_out,
+                code=otp_code,
+                is_used=False
+            )
+
+            if otp_obj.is_expired():
+                raise OTPCode.DoesNotExist  # Treat as invalid
+
+        except (WalletTransaction.DoesNotExist, OTPCode.DoesNotExist):
+            return Response({'error': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reference_id = transfer_out.reference_id
+
+        with transaction.atomic():
+            # Mark both transactions as completed
+            transfer_in = WalletTransaction.objects.get(
+                reference_id=reference_id,
+                transaction_type='transfer_in'
+            )
+
+            transfer_out.status = 'completed'
+            transfer_out.completed_at = timezone.now()
+            transfer_out.save()
+
+            transfer_in.status = 'completed'
+            transfer_in.completed_at = timezone.now()
+            transfer_in.save()
+
+            otp_obj.is_used = True
+            otp_obj.save()
+
+        # Signal handlers will now automatically:
+        # - Deduct from sender
+        # - Credit to receiver
+        # - Create dashboard entries
+        # - Send receiver email
+
+        return Response({
+            'message': 'Transfer completed successfully!',
+            'reference_id': reference_id,
+            'amount': str(transfer_out.amount)
+        }, status=status.HTTP_200_OK)

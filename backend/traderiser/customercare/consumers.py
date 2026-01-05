@@ -240,9 +240,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
         return ChatThread.objects.get_or_create(user=self.user)[0]
 
     @database_sync_to_async
-    def get_messages(self):
+    def get_messages(self, thread=None):
+        if thread is None:
+            thread = self.thread
         from .models import Message
-        msgs = self.thread.messages.select_related('sender').all()
+        msgs = thread.messages.select_related('sender').all()
         return [
             {
                 "id": m.id,
@@ -251,10 +253,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "is_read": m.is_read,
                 "is_system": m.is_system,
                 "sender": {
-                    "username": m.sender.username,
-                    "is_staff": m.sender.is_staff
+                    "username": "TradeRiser Support" if (m.is_system and m.sender is None) 
+                               else (m.sender.username if m.sender else "Support"),
+                    "is_staff": True
                 },
-                "is_me": m.sender == self.user
+                "is_me": False if (m.is_system or m.sender is None) else (m.sender == self.user)
             }
             for m in msgs
         ]

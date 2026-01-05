@@ -88,10 +88,13 @@ class AdminChatView(APIView):
         if not content:
             return Response({"error": "Content required"}, status=400)
 
+        is_system = request.data.get('is_system', False)  # Allow admin to mark as system message
+
         message = Message.objects.create(
             thread=thread,
             sender=request.user,
-            content=content
+            content=content,
+            is_system=is_system
         )
         return Response(MessageSerializer(message, context={'request': request}).data, status=201)
 

@@ -1,9 +1,8 @@
-// components/robots/user-robots.tsx
 "use client"
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { toast } from "sonner" // <-- global toast
+import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { formatPrice } from "@/lib/format-currency"
 
@@ -74,8 +73,8 @@ export function UserRobots() {
           >
             {wasPurchasedAtDiscount && (
               <div className="absolute top-3 right-3">
-                <div className="bg-gradient-to-r from-red-600 to-green-600 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-md">
-                  🎄 Holiday Deal
+                <div className="bg-gradient-to-r from-amber-400 to-cyan-400 text-gray-900 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-md">
+                  🎆 New Year Deal
                 </div>
               </div>
             )}
@@ -90,7 +89,7 @@ export function UserRobots() {
                   {wasPurchasedAtDiscount && (
                     <span className="text-xs text-white/40 line-through">{formatPrice(originalPrice)}</span>
                   )}
-                  <span className={`text-sm font-bold ${wasPurchasedAtDiscount ? "text-green-400" : "text-white"}`}>
+                  <span className={`text-sm font-bold ${wasPurchasedAtDiscount ? "text-cyan-400" : "text-white"}`}>
                     {formatPrice(purchasedPrice)}
                   </span>
                 </div>

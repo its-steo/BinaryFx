@@ -9,6 +9,7 @@ from .views import (
     PlaceTradeView,
     TradeHistoryView,
     ResetDemoBalanceView,
+    GenerateSignalView,
 )
 
 urlpatterns = [
@@ -20,4 +21,5 @@ urlpatterns = [
     path('trades/place/', PlaceTradeView.as_view(), name='place_trade'),
     path('trades/history/', TradeHistoryView.as_view(), name='trade_history'),
     path('reset-demo-balance/', ResetDemoBalanceView.as_view(), name='reset_demo_balance'),
+    path('signals/generate/', GenerateSignalView.as_view(), name='generate_signal'),
 ]
