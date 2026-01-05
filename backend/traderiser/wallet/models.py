@@ -73,7 +73,6 @@ class MpesaNumber(models.Model):
 # --------------------------------------------------------------
 # 4. Wallet
 # --------------------------------------------------------------
-
 class Wallet(models.Model):
     WALLET_TYPES = [
         ('main', 'Main'),
@@ -103,15 +102,19 @@ class Wallet(models.Model):
 class OTPCode(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     code = models.CharField(max_length=6, default=generate_otp)
-    purpose = models.CharField(max_length=20)  # 'withdrawal'
+    purpose = models.CharField(max_length=20)
     transaction = models.OneToOneField(
         'WalletTransaction', on_delete=models.CASCADE, null=True, blank=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)  # Explicit expiration time
     is_used = models.BooleanField(default=False)
 
     def is_expired(self):
-        return timezone.now() > self.created_at + timezone.timedelta(seconds=60)
+        if self.expires_at:
+            return timezone.now() > self.expires_at
+        # Fallback to 5 minutes if expires_at not set
+        return timezone.now() > self.created_at + timezone.timedelta(minutes=5)
 
     def __str__(self):
         return f"{self.user.username} - {self.code} ({self.purpose})"
@@ -124,6 +127,8 @@ class WalletTransaction(models.Model):
     TRANSACTION_TYPES = [
         ('deposit', 'Deposit'),
         ('withdrawal', 'Withdrawal'),
+        ('transfer_out', 'Transfer Out'),
+        ('transfer_in', 'Transfer In'),
     ]
 
     wallet = models.ForeignKey(
@@ -148,8 +153,8 @@ class WalletTransaction(models.Model):
     )
     reference_id = models.CharField(
         max_length=50,
-        unique=True,
         default=generate_reference_id
+        # unique=True REMOVED → allows transfer_in/out to share same reference_id
     )
     description = models.TextField(blank=True)
     mpesa_phone = models.CharField(max_length=15, blank=True, null=True)

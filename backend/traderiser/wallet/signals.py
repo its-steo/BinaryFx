@@ -1,15 +1,16 @@
 # wallet/signals.py
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
-from .models import Wallet, WalletTransaction, Currency, ExchangeRate, OTPCode
 from django.db import transaction
 from django.conf import settings
-from accounts.models import Account
+from django.utils import timezone
 from django.core.mail import send_mail
 from decimal import Decimal
-from django.utils import timezone
-from dashboard.models import Transaction
 import logging
+
+from .models import WalletTransaction, Currency, Wallet
+from accounts.models import Account
+from dashboard.models import Transaction
 
 logger = logging.getLogger('wallet')
 
@@ -28,7 +29,7 @@ def create_default_wallets(sender, instance, created, **kwargs):
                 account=instance, wallet_type='trading', currency=ksh,
                 defaults={'balance': Decimal('0.00')}
             )
-            
+
 @receiver(pre_save, sender=WalletTransaction)
 def pre_save_wallet_transaction(sender, instance, **kwargs):
     if instance.pk:
@@ -58,16 +59,32 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
         instance.save(update_fields=['completed_at'])
 
         with transaction.atomic():
+            # Determine the amount to adjust in wallet's currency
+            adjust_amount = instance.converted_amount if instance.converted_amount else instance.amount
+
+            if instance.transaction_type in ['deposit', 'transfer_in']:
+                wallet.balance += adjust_amount
+                dashboard_type = 'deposit' if instance.transaction_type == 'deposit' else 'transfer_in'
+                desc_prefix = "Deposit" if instance.transaction_type == 'deposit' else "Received transfer"
+            elif instance.transaction_type in ['withdrawal', 'transfer_out']:
+                adjust_amount = -instance.amount  # Amount is always in source/wallet currency for out/withdrawal
+                wallet.balance += adjust_amount  # i.e., deduct
+                dashboard_type = 'withdrawal' if instance.transaction_type == 'withdrawal' else 'transfer_out'
+                desc_prefix = "Withdrawal" if instance.transaction_type == 'withdrawal' else "Sent transfer"
+            else:
+                return  # Unknown type, skip to avoid errors
+
+            wallet.save()  # Triggers sync_all_wallets if defined elsewhere
+
+            Transaction.objects.create(
+                account=wallet.account,
+                amount=adjust_amount,
+                transaction_type=dashboard_type,
+                description=f"{desc_prefix}: {instance.reference_id}"
+            )
+
+            # Emails for completion
             if instance.transaction_type == 'deposit':
-                # Update the wallet that received the transaction
-                wallet.balance += instance.converted_amount
-                wallet.save()  # Triggers sync_all_wallets
-                Transaction.objects.create(
-                    account=wallet.account,
-                    amount=instance.converted_amount,
-                    transaction_type='deposit',
-                    description=f"Approved: {instance.reference_id}"
-                )
                 try:
                     send_mail(
                         "Deposit Approved!",
@@ -80,14 +97,6 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     logger.error(f"Failed to send deposit approval email for {instance.reference_id}: {str(e)}")
 
             elif instance.transaction_type == 'withdrawal':
-                wallet.balance -= instance.amount
-                wallet.save()  # Triggers sync_all_wallets
-                Transaction.objects.create(
-                    account=wallet.account,
-                    amount=-instance.amount,
-                    transaction_type='withdrawal',
-                    description=f"Paid: {instance.reference_id}"
-                )
                 try:
                     send_mail(
                         "Withdrawal Paid!",
@@ -98,6 +107,19 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     )
                 except Exception as e:
                     logger.error(f"Failed to send withdrawal approval email for {instance.reference_id}: {str(e)}")
+
+            elif instance.transaction_type == 'transfer_in':
+                try:
+                    from_user = instance.description.split('from ')[-1] if 'from ' in instance.description else 'Another user'
+                    send_mail(
+                        "You Received Funds!",
+                        f"Hi {user.username},\n\nYou have received ${instance.amount} USD in your {wallet.account.account_type} account.\nFrom: {from_user}\n\nRef: {instance.reference_id}\nThank you for using TradeRiser!",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [user.email],
+                        fail_silently=True
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send transfer_in email: {str(e)}")
 
     elif instance.status == 'failed' and old_status != 'failed':
         if instance.transaction_type == 'deposit':

@@ -71,14 +71,16 @@ class ChatThread(models.Model):
 
 class Message(models.Model):
     thread = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='messages')
-    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    sender = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
     content = models.TextField()
     sent_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
-    is_system = models.BooleanField(default=False)  # Auto welcome, etc.
+    is_system = models.BooleanField(default=False)  # For welcome, canned responses, etc.
 
     class Meta:
         ordering = ['sent_at']
 
     def __str__(self):
-        return f"{self.sender.username}: {self.content[:30]}"
+        if self.is_system and self.sender is None:
+            return f"TradeRiser Support: {self.content[:30]}..."
+        return f"{self.sender.username if self.sender else 'System'}: {self.content[:30]}..."

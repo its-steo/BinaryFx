@@ -6,8 +6,8 @@ interface ApiResponse<T> {
   error?: string
   status?: number
 }
-interface Number{
-replace?: number
+interface Number {
+  replace?: number
 }
 
 export interface Currency {
@@ -71,13 +71,13 @@ export interface ForexRobot {
   created_at: string
   image_url?: string
   image?: string
-  discounted_price?:number
-  effective_price?:number
-  original_price?:number
+  discounted_price?: number
+  effective_price?: number
+  original_price?: number
 }
- export interface RobotRaw{
-  price?:number
- }
+export interface RobotRaw {
+  price?: number
+}
 
 export interface UserRobot {
   id: number
@@ -90,6 +90,7 @@ export interface UserRobot {
   updated_at: string
   purchased_at: string
   last_trade_time?: string
+  user_robots?:UserRobot[]
 }
 
 export interface BotLog {
@@ -218,12 +219,73 @@ export interface UserAccount {
   [key: string]: unknown
 }
 
-
-
 export interface InitiateManagementResponse {
   management_id: string
   payment_amount: number
   message: string
+}
+
+export interface Trader {
+  id: number
+  user: number
+  username?: string
+  bio: string
+  risk_level: "low" | "medium" | "high"
+  min_allocation: number
+  performance_fee_percent: number
+  is_active: boolean
+  win_rate: number
+  average_return: number
+  subscriber_count: number
+  created_at: string
+  is_verified?: boolean
+}
+
+export interface CopySubscription {
+  id: number
+  user: number
+  account: number
+  trader: Trader
+  allocated_amount: number
+  max_drawdown_percent: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  current_pnl?: number
+  copied_trades?: number
+}
+
+export interface CreateSubscriptionPayload {
+  trader: number
+  account: number
+  allocated_amount: number
+  max_drawdown_percent?: number
+}
+
+export interface BecomeTraderPayload {
+  bio: string
+  risk_level: "low" | "medium" | "high"
+  min_allocation: number
+  performance_fee_percent: number
+}
+
+// Newly added Signal generation interface
+export interface Signal {
+  id: number
+  market: {
+    id: number
+    name: string
+    profit_multiplier:number
+  }
+  direction: "buy" | "sell"
+  probability: number
+  take_profit: number
+  stop_loss: number
+  generated_at: string
+  message?: string
+  timeframe?: string
+  current_price?: number
+  strength?:number
 }
 
 /* ------------------------------------------------------------------ */
@@ -536,7 +598,7 @@ export const getRobots = () => apiRequest("/trading/robots/")
 export const getUserRobots = () => apiRequest("/trading/user-robots/")
 export const purchaseRobot = (
   robotId: number,
-  account_type: "standard" | "demo" = "standard"   // default to real account
+  account_type: "standard" | "demo" = "standard", // default to real account
 ) =>
   apiRequest<{
     message: string
@@ -544,7 +606,7 @@ export const purchaseRobot = (
     method: "POST",
     body: JSON.stringify({ account_type }),
   })
-  
+
 export const resetDemoBalance = () => apiRequest("/accounts/demo/reset/", { method: "POST" })
 
 export const getBots = () => apiRequest("/bots/")
@@ -611,6 +673,27 @@ export const setMpesaNumber = (data: { phone_number: string }) =>
 
 export const resendOTP = (transactionId: string) =>
   apiRequest("/wallet/resend-otp/", { method: "POST", body: JSON.stringify({ transaction_id: transactionId }) })
+
+// Newly added endpoints for transfers
+export const initiateTransfer = (data: {
+  amount: number
+  sender_account_type: string
+  recipient_email: string
+  recipient_account_type: string
+}) =>
+  apiRequest<{ transaction_id: string }>("/wallet/transfer/initiate/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+export const verifyTransfer = (data: { otp: string; transaction_id: number }) =>
+  apiRequest<{ message: string }>("/wallet/transfer/verify/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+// Signal generation endpoint
+export const generateSignal = () => apiRequest<Signal>("/trading/signals/generate/", { method: "POST" })
 
 /* ------------------------------------------------------------------ */
 /*  FOREX TRADING                                                     */
@@ -786,7 +869,7 @@ export const resendEmailOtp = (email: string) =>
     body: JSON.stringify({ email }),
   })
 
-  // --- PASSWORD RESET ---
+// --- PASSWORD RESET ---
 export const requestPasswordReset = (email: string) =>
   apiRequest<{ message: string }>("/accounts/password-reset/", {
     method: "POST",
@@ -809,12 +892,6 @@ export const confirmPasswordReset = (data: {
     method: "POST",
     body: JSON.stringify(data),
   })
-
-export interface InitiateManagementResponse {
-  management_id: string
-  payment_amount: number
-  message: string
-}
 
 export const initiateManagement = (data: {
   stake: number
@@ -855,6 +932,71 @@ export interface ManagementRequest {
   end_date: string | null
   created_at: string
   account_type: "standard" | "profx"
+}
+
+/**
+ * Fetch all active traders from the leaderboard
+ */
+export async function fetchTraders() {
+  return apiRequest<Trader[]>("/copy-trading/traders/", {
+    method: "GET",
+  })
+}
+
+/**
+ * Apply to become a trader (signal provider)
+ */
+export async function applyToBecomeTrader(payload: BecomeTraderPayload) {
+  return apiRequest<Trader>("/copy-trading/become-trader/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Create or update a copy subscription
+ */
+export async function createCopySubscription(payload: CreateSubscriptionPayload) {
+  return apiRequest<CopySubscription>("/copy-trading/subscriptions/create/", {
+    method: "POST",
+    body: JSON.stringify({
+      trader: payload.trader,
+      account: payload.account || 1, // Default to first account; should be user's account
+      allocated_amount: payload.allocated_amount,
+      max_drawdown_percent: payload.max_drawdown_percent || 20,
+    }),
+  })
+}
+
+/**
+ * Fetch all subscriptions for the current user
+ */
+export async function fetchUserSubscriptions() {
+  return apiRequest<CopySubscription[]>("/copy-trading/subscriptions/", {
+    method: "GET",
+  })
+}
+
+/**
+ * Pause a subscription
+ */
+export async function pauseSubscription(subscriptionId: number) {
+  return apiRequest<{ message: string }>(`/copy-trading/subscriptions/${subscriptionId}/pause/`, {
+    method: "DELETE",
+  })
+}
+
+/**
+ * Resume a paused subscription
+ */
+export async function resumeSubscription(subscriptionId: number, allocatedAmount: number) {
+  return apiRequest<CopySubscription>("/copy-trading/subscriptions/create/", {
+    method: "POST",
+    body: JSON.stringify({
+      subscription_id: subscriptionId,
+      allocated_amount: allocatedAmount,
+    }),
+  })
 }
 
 /* ------------------------------------------------------------------ */
@@ -925,4 +1067,7 @@ export const api = {
   requestPasswordReset,
   verifyPasswordResetOtp,
   confirmPasswordReset,
+  initiateTransfer,
+  verifyTransfer,
+  generateSignal,
 }

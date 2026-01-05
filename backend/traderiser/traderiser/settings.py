@@ -64,7 +64,9 @@ INSTALLED_APPS = [
     'customercare',
     'management',
     'traderpulse',
+    'copy_trading.apps.CopyTradingConfig',
     'channels',
+    
 
     
 ]
@@ -194,9 +196,7 @@ CHANNEL_LAYERS = {
             "symmetric_encryption_keys": [SECRET_KEY],  # ← You keep this (good!)
             "capacity": 1000,
             "expiry": 60,
-            # ↓↓↓ THESE TWO LINES ARE THE FIX ↓↓↓
-            "password": None,                    # ← Force no AUTH command
-            "ssl_cert_reqs": None,               # ← Also helps on Windows
+           
         },
     },
 }
@@ -268,6 +268,7 @@ CELERY_TIMEZONE = 'UTC'  # Or your TZ
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'  # For dynamic scheduling
 
 
+POLYGON_API_KEY = 'qZa9l7TuOwcFhEh3Tpj8tYIqBM8F43qQ'
 
 
 

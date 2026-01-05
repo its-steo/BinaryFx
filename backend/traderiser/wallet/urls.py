@@ -2,7 +2,7 @@
 from django.urls import path
 from .views import (
     WalletListView, MpesaNumberView, DepositView, WithdrawalOTPView,
-    VerifyWithdrawalOTPView, TransactionListView, MpesaCallbackView, ResendOTPView
+    VerifyWithdrawalOTPView, TransactionListView, MpesaCallbackView, ResendOTPView,InitiateTransferView, VerifyTransferOTPView
 )
 
 urlpatterns = [
@@ -14,4 +14,6 @@ urlpatterns = [
     path('transactions/', TransactionListView.as_view(), name='transaction_list'),
     path('callback/', MpesaCallbackView.as_view(), name='mpesa_callback'),
     path('resend-otp/', ResendOTPView.as_view(), name='resend_otp'),
+    path('transfer/initiate/', InitiateTransferView.as_view(), name='transfer_initiate'),
+    path('transfer/verify/', VerifyTransferOTPView.as_view(), name='transfer_verify'),
 ]

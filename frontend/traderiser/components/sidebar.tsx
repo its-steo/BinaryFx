@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Headset,
   Briefcase,
+  Copy,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import type { Account } from "@/types/account"
@@ -139,6 +140,7 @@ export function Sidebar({
             { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
             { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap },
             { href: "/fx-pro-robots", label: "Pro-Robots", icon: Bot },
+            { href: "/copy-trading", label: "Copy Trading", icon: Copy },
             { href: "/wallet", label: "Wallet", icon: WalletIcon },
             { href: "/profile", label: "Profile", icon: User },
             { href: "/customercare", label: "Customer Care", icon: MessageSquare },
@@ -149,26 +151,26 @@ export function Sidebar({
             { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
             { href: "/trading", label: "Trading", icon: TrendingUp },
             { href: "/robots", label: "Robots", icon: Bot },
+            { href: "/copy-trading", label: "Copy Trading", icon: Copy },
             { href: "/wallet", label: "Wallet", icon: WalletIcon },
             { href: "/profile", label: "Profile", icon: User },
             { href: "/customercare", label: "Customer Care", icon: MessageSquare },
             { href: "/agents", label: "Agent Services", icon: Headset },
             { href: "/management", label: "Account Management", icon: Briefcase },
-
           ]
       : [
           { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
           { href: "/trading", label: "Trading", icon: TrendingUp },
-          ...(hasProFxAccount && loginType === "real"
-            ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap }]
-            : []),
+          //...(hasProFxAccount && loginType === "real"
+          //  ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap }]
+          //  : []),
           { href: "/robots", label: "Robots", icon: Bot },
+          { href: "/copy-trading", label: "Copy Trading", icon: Copy },
           { href: "/wallet", label: "Wallet", icon: WalletIcon },
           { href: "/profile", label: "Profile", icon: User },
           { href: "/customercare", label: "Customer Care", icon: MessageSquare },
           { href: "/agents", label: "Agent Services", icon: Headset },
           { href: "/management", label: "Account Management", icon: Briefcase },
-
         ]
 
   return (
@@ -187,9 +189,22 @@ export function Sidebar({
           isOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
-        {/* Header Image - responsive height */}
-        <div className="h-40 sm:h-36 md:h-48 w-full bg-cover bg-center relative flex-shrink-0">
-          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/sidebg.jpg')" }} />
+        {/* VIDEO HEADER - replaced image with video */}
+        <div className="relative h-40 sm:h-36 md:h-48 w-full overflow-hidden flex-shrink-0">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          >
+            {/* Replace '/sidebg.mp4' with your actual video file path */}
+            <source src="/sidebg.mp4" type="video/mp4" />
+            {/* Optional fallback for browsers that don't support video */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black to-slate-900" />
+          </video>
+
+          {/* Dark overlay gradient to keep text readable */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-transparent" />
         </div>
 
@@ -234,7 +249,7 @@ export function Sidebar({
             </select>
           )}
 
-          {/* Navigation - scrollable on smaller screens */}
+          {/* Navigation */}
           <nav className="flex flex-col gap-2 min-h-0">
             {navItems.map((item) => {
               const Icon = item.icon
@@ -270,9 +285,9 @@ export function Sidebar({
         <div className="flex flex-col gap-3 p-3 sm:p-3 md:p-4 border-t border-white/10 flex-shrink-0 bg-gradient-to-t from-black/50 to-transparent">
           <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2">
             <p className="text-xs font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-pink-500">
-              Trade Riser v1.0
+              Trade Riser v2.0
             </p>
-            <p className="text-xs text-white/70">Binary FX</p>
+            <p className="text-xs text-white/70">Forex Ascend</p>
           </div>
           <button
             onClick={handleLogout}

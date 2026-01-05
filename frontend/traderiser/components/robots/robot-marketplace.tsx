@@ -1,4 +1,3 @@
-// components/robot-marketplace.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -124,19 +123,19 @@ export function RobotMarketplace({ balance, onBalanceChange }: RobotMarketplaceP
             {hasDiscount && !isDemoMode && (
               <div className="absolute top-4 right-4 z-10">
                 <div className="relative">
-                  <div className="absolute -top-2 -left-2 text-white/40 text-xs">❄</div>
-                  <div className="absolute -bottom-2 -right-2 text-white/40 text-xs">❄</div>
-                  <div className="bg-gradient-to-br from-red-600 via-red-500 to-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg transform rotate-3">
+                  <div className="absolute -top-3 -left-3 text-white/30 text-lg">✨</div>
+                  <div className="absolute -bottom-3 -right-3 text-white/30 text-lg">✨</div>
+                  <div className="bg-gradient-to-br from-amber-400 via-yellow-300 to-cyan-400 text-gray-900 px-4 py-2 rounded-xl font-bold shadow-lg transform -rotate-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">🎄</span>
+                      <span className="text-lg">🎆</span>
                       <div className="flex flex-col items-center">
-                        <span className="text-xs uppercase tracking-wide">Christmas</span>
+                        <span className="text-xs uppercase tracking-wide font-black">New Year</span>
                         <span className="text-lg leading-none">{discountPercent}% OFF</span>
                       </div>
-                      <span className="text-lg">🎁</span>
+                      <span className="text-lg">🎉</span>
                     </div>
                   </div>
-                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-800"></div>
+                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-amber-300"></div>
                 </div>
               </div>
             )}
@@ -160,8 +159,8 @@ export function RobotMarketplace({ balance, onBalanceChange }: RobotMarketplaceP
                   <>
                     <p className="text-sm text-white/40 line-through">${originalPrice.toFixed(2)}</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold text-green-400">${discountedPrice.toFixed(2)}</p>
-                      <span className="text-xs text-green-400 font-semibold">
+                      <p className="text-2xl font-bold text-cyan-400">${discountedPrice.toFixed(2)}</p>
+                      <span className="text-xs text-cyan-400 font-semibold">
                         SAVE ${(originalPrice - discountedPrice).toFixed(2)}
                       </span>
                     </div>

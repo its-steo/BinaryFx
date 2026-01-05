@@ -1,6 +1,6 @@
 # trading/admin.py
 from django.contrib import admin
-from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade
+from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal
 
 @admin.register(MarketType)
 class MarketTypeAdmin(admin.ModelAdmin):
@@ -44,3 +44,9 @@ class TradeAdmin(admin.ModelAdmin):
     list_filter = ('is_win', 'used_martingale', 'timestamp')
     search_fields = ('user__username', 'market__name')
     readonly_fields = ('profit', 'session_profit_before')
+
+@admin.register(Signal)
+class SignalAdmin(admin.ModelAdmin):
+    list_display = ('user', 'market', 'direction', 'probability', 'take_profit', 'stop_loss', 'generated_at')
+    list_filter = ('direction', 'generated_at')
+    search_fields = ('user__username', 'market__name')
