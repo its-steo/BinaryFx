@@ -1,17 +1,14 @@
+# wallet/admin.py
 from django.contrib import admin
 from django.urls import reverse, path
 from django.utils.html import format_html
 from django.utils import timezone
-from django.db import transaction
 from django.contrib import messages
-from django.core.mail import send_mail
-from django.conf import settings
 from django.http import HttpResponseRedirect
 from .models import Currency, ExchangeRate, Wallet, WalletTransaction, MpesaNumber, OTPCode
-from dashboard.models import Transaction
 import logging
 
-logger = logging.getLogger('wallet')  # Logger for email failures
+logger = logging.getLogger('wallet')
 
 @admin.register(Currency)
 class CurrencyAdmin(admin.ModelAdmin):
@@ -108,73 +105,26 @@ class WalletTransactionAdmin(admin.ModelAdmin):
 
     # --- Actions ---
     def approve_selected(self, request, queryset):
-        for obj in queryset.filter(status__in=['pending', 'failed']):
-            self.approve_transaction(request, obj)
+        updated = 0
+        for obj in queryset.filter(status='pending'):
+            obj.status = 'completed'
+            obj.completed_at = timezone.now()
+            obj.save()  # This triggers the signal → balance credited once
+            updated += 1
+        messages.success(request, f"{updated} transaction(s) approved. Balances updated automatically.")
 
     approve_selected.short_description = "Approve selected transactions"
 
     def fail_selected(self, request, queryset):
+        updated = 0
         for obj in queryset.filter(status__in=['pending', 'failed']):
             obj.status = 'failed'
             obj.description += " | Manually failed by admin"
             obj.save()
-            messages.success(request, f"Transaction {obj.reference_id} failed.")
+            updated += 1
+        messages.success(request, f"{updated} transaction(s) marked as failed.")
 
     fail_selected.short_description = "Fail selected transactions"
-
-    def approve_transaction(self, request, obj):
-        wallet = obj.wallet
-        user = wallet.account.user
-        with transaction.atomic():
-            if obj.transaction_type == 'deposit':
-                wallet.balance += obj.converted_amount
-                wallet.save()  # Triggers sync_wallet_to_account
-                Transaction.objects.create(
-                    account=wallet.account,
-                    amount=obj.converted_amount,
-                    transaction_type='deposit',
-                    description=f"Approved: {obj.reference_id}"
-                )
-                try:
-                    send_mail(
-                        "Deposit Approved (Manual)!",
-                        f"Hi {user.username},\n\nYour deposit of KSh {obj.amount} has been approved.\n${obj.converted_amount} USD credited.\nRef: {obj.reference_id}",
-                        settings.DEFAULT_FROM_EMAIL,
-                        [user.email],
-                        fail_silently=True
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send deposit approval email for transaction {obj.reference_id}: {str(e)}")
-                    messages.warning(request, f"Approved transaction {obj.reference_id}, but failed to send email: {str(e)}")
-
-            elif obj.transaction_type == 'withdrawal':
-                # Balance already deducted on OTP verification
-                # Just verify it's still there (optional safety)
-                if wallet.balance + obj.amount < obj.amount:  # i.e., negative after refund
-                    messages.error(request, f"Balance inconsistency for {obj.reference_id}")
-                    return
-            
-                Transaction.objects.create(
-                    account=wallet.account,
-                    amount=-obj.amount,
-                    transaction_type='withdrawal',
-                    description=f"Paid: {obj.reference_id}"
-                )
-                try:
-                    send_mail(
-                        "Withdrawal Paid!",
-                        f"Hi {user.username},\n\n${obj.amount} USD has been sent to {obj.mpesa_phone}.\nRef: {obj.reference_id}",
-                        settings.DEFAULT_FROM_EMAIL,
-                        [user.email],
-                        fail_silently=True
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send withdrawal approval email for transaction {obj.reference_id}: {str(e)}")
-                    messages.warning(request, f"Approved transaction {obj.reference_id}, but failed to send email: {str(e)}")
-
-            obj.status = 'completed'
-            obj.completed_at = timezone.now()
-            obj.save()
 
     # --- Custom URLs for Quick Actions ---
     def get_urls(self):
@@ -193,45 +143,34 @@ class WalletTransactionAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
 
-    def approve_transaction_view(self, request, transaction_id, *args, **kwargs):
+    def approve_transaction_view(self, request, transaction_id):
         obj = self.get_object(request, transaction_id)
         if obj is None:
             return self._get_obj_does_not_exist_redirect(request, self.model._meta, transaction_id)
-        self.approve_transaction(request, obj)
-        return HttpResponseRedirect("..")
+        if obj.status == 'pending':
+            obj.status = 'completed'
+            obj.completed_at = timezone.now()
+            obj.save()  # Triggers signal → credit once
+            messages.success(request, f"Transaction {obj.reference_id} approved and balance credited.")
+        return HttpResponseRedirect("../..")
 
-    def fail_transaction_view(self, request, transaction_id, *args, **kwargs):
+    def fail_transaction_view(self, request, transaction_id):
         obj = self.get_object(request, transaction_id)
         if obj is None:
             return self._get_obj_does_not_exist_redirect(request, self.model._meta, transaction_id)
         obj.status = 'failed'
         obj.description += " | Manually failed by admin"
         obj.save()
-        messages.success(request, f"Transaction {obj.reference_id} failed.")
-        return HttpResponseRedirect("..")
+        messages.success(request, f"Transaction {obj.reference_id} marked as failed.")
+        return HttpResponseRedirect("../..")
 
     # --- Handle Direct Status Changes via List Editable ---
     def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
         if change and 'status' in form.changed_data:
-            old_status = WalletTransaction.objects.get(pk=obj.pk).status
-            if obj.status == 'completed' and old_status in ['pending', 'failed']:
-                self.approve_transaction(request, obj)
-            elif obj.status == 'failed' and old_status in ['pending', 'completed']:
+            if obj.status == 'completed':
+                messages.success(request, f"Transaction {obj.reference_id} approved → balance credited automatically.")
+            elif obj.status == 'failed':
                 obj.description += " | Manually failed by admin"
                 obj.save()
-                messages.success(request, f"Transaction {obj.reference_id} failed.")
-            else:
-                super().save_model(request, obj, form, change)
-        else:
-            super().save_model(request, obj, form, change)
-
-@admin.register(MpesaNumber)
-class MpesaNumberAdmin(admin.ModelAdmin):
-    list_display = ('user', 'phone_number')
-    search_fields = ('user__username', 'user__email', 'phone_number')
-
-@admin.register(OTPCode)
-class OTPCodeAdmin(admin.ModelAdmin):
-    list_display = ('user', 'code', 'purpose', 'created_at', 'is_used')
-    list_filter = ('purpose', 'is_used')
-    search_fields = ('user__username', 'code')
+                messages.success(request, f"Transaction {obj.reference_id} marked as failed.")
