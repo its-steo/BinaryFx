@@ -45,7 +45,7 @@ def pre_save_wallet_transaction(sender, instance, **kwargs):
 def post_save_wallet_transaction(sender, instance, **kwargs):
     old_status = getattr(instance, '_old_status', None)
     if old_status == instance.status:
-        return  # No change, skip
+        return  # No status change
 
     # Skip automatic processing for previously failed transactions
     if old_status == 'failed':
@@ -54,28 +54,58 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
     user = instance.wallet.account.user
     wallet = instance.wallet
 
+    # Handle completion (from pending/failed → completed)
     if instance.status == 'completed' and old_status != 'completed':
-        instance.completed_at = timezone.now()
-        instance.save(update_fields=['completed_at'])
+        if not instance.completed_at:
+            instance.completed_at = timezone.now()
+            instance.save(update_fields=['completed_at'])
 
         with transaction.atomic():
-            # Determine the amount to adjust in wallet's currency
-            adjust_amount = instance.converted_amount if instance.converted_amount else instance.amount
+            adjust_amount = None
+            dashboard_type = None
+            desc_prefix = None
+            update_balance = False
 
-            if instance.transaction_type in ['deposit', 'transfer_in']:
-                wallet.balance += adjust_amount
-                dashboard_type = 'deposit' if instance.transaction_type == 'deposit' else 'transfer_in'
-                desc_prefix = "Deposit" if instance.transaction_type == 'deposit' else "Received transfer"
-            elif instance.transaction_type in ['withdrawal', 'transfer_out']:
-                adjust_amount = -instance.amount  # Amount is always in source/wallet currency for out/withdrawal
-                wallet.balance += adjust_amount  # i.e., deduct
-                dashboard_type = 'withdrawal' if instance.transaction_type == 'withdrawal' else 'transfer_out'
-                desc_prefix = "Withdrawal" if instance.transaction_type == 'withdrawal' else "Sent transfer"
+            if instance.transaction_type == 'deposit':
+                credit_amount = instance.converted_amount if instance.converted_amount else instance.amount
+                wallet.balance += credit_amount
+                update_balance = True
+
+                adjust_amount = credit_amount
+                dashboard_type = 'deposit'
+                desc_prefix = "Deposit"
+
+            elif instance.transaction_type == 'transfer_in':
+                credit_amount = instance.amount  # Usually USD to USD
+                wallet.balance += credit_amount
+                update_balance = True
+
+                adjust_amount = credit_amount
+                dashboard_type = 'transfer_in'
+                desc_prefix = "Received transfer"
+
+            elif instance.transaction_type == 'transfer_out':
+                debit_amount = instance.amount
+                wallet.balance -= debit_amount
+                update_balance = True
+
+                adjust_amount = -debit_amount
+                dashboard_type = 'transfer_out'
+                desc_prefix = "Sent transfer"
+
+            elif instance.transaction_type == 'withdrawal':
+                # DO NOT touch balance — already deducted on OTP verification
+                adjust_amount = -instance.amount
+                dashboard_type = 'withdrawal'
+                desc_prefix = "Withdrawal"
+
             else:
-                return  # Unknown type, skip to avoid errors
+                return  # Unknown type
 
-            wallet.save()  # Triggers sync_all_wallets if defined elsewhere
+            if update_balance:
+                wallet.save()
 
+            # Always create the dashboard transaction record
             Transaction.objects.create(
                 account=wallet.account,
                 amount=adjust_amount,
@@ -83,47 +113,44 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                 description=f"{desc_prefix}: {instance.reference_id}"
             )
 
-            # Emails for completion
-            if instance.transaction_type == 'deposit':
-                try:
+            # Success emails
+            try:
+                if instance.transaction_type == 'deposit':
                     send_mail(
                         "Deposit Approved!",
-                        f"Hi {user.username},\n\nYour deposit of {instance.amount} {instance.currency.code} has been approved.\n{instance.converted_amount} {instance.target_currency.code} credited.\nRef: {instance.reference_id}",
+                        f"Hi {user.username},\n\nYour deposit of {instance.amount} {instance.currency.code} has been approved.\n"
+                        f"{instance.converted_amount} {instance.target_currency.code if instance.target_currency else 'USD'} credited.\n"
+                        f"Ref: {instance.reference_id}",
                         settings.DEFAULT_FROM_EMAIL,
                         [user.email],
                         fail_silently=True
                     )
-                except Exception as e:
-                    logger.error(f"Failed to send deposit approval email for {instance.reference_id}: {str(e)}")
-
-            elif instance.transaction_type == 'withdrawal':
-                try:
+                elif instance.transaction_type == 'withdrawal':
                     send_mail(
                         "Withdrawal Paid!",
-                        f"Hi {user.username},\n\n{instance.amount} {instance.currency.code} has been sent to {instance.mpesa_phone}.\nRef: {instance.reference_id}",
+                        f"Hi {user.username},\n\n{instance.amount} {instance.currency.code} has been sent to {instance.mpesa_phone}.\n"
+                        f"Ref: {instance.reference_id}",
                         settings.DEFAULT_FROM_EMAIL,
                         [user.email],
                         fail_silently=True
                     )
-                except Exception as e:
-                    logger.error(f"Failed to send withdrawal approval email for {instance.reference_id}: {str(e)}")
-
-            elif instance.transaction_type == 'transfer_in':
-                try:
+                elif instance.transaction_type == 'transfer_in':
                     from_user = instance.description.split('from ')[-1] if 'from ' in instance.description else 'Another user'
                     send_mail(
                         "You Received Funds!",
-                        f"Hi {user.username},\n\nYou have received ${instance.amount} USD in your {wallet.account.account_type} account.\nFrom: {from_user}\n\nRef: {instance.reference_id}\nThank you for using TradeRiser!",
+                        f"Hi {user.username},\n\nYou have received ${instance.amount} USD in your {wallet.account.account_type} account.\n"
+                        f"From: {from_user}\n\nRef: {instance.reference_id}\nThank you for using TradeRiser!",
                         settings.DEFAULT_FROM_EMAIL,
                         [user.email],
                         fail_silently=True
                     )
-                except Exception as e:
-                    logger.error(f"Failed to send transfer_in email: {str(e)}")
+            except Exception as e:
+                logger.error(f"Failed to send completion email for {instance.reference_id}: {str(e)}")
 
+    # Handle failure
     elif instance.status == 'failed' and old_status != 'failed':
-        if instance.transaction_type == 'deposit':
-            try:
+        try:
+            if instance.transaction_type == 'deposit':
                 send_mail(
                     "Deposit Failed",
                     f"Hi {user.username},\n\nYour deposit of {instance.amount} {instance.currency.code} failed.\nRef: {instance.reference_id}",
@@ -131,10 +158,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     [user.email],
                     fail_silently=True
                 )
-            except Exception as e:
-                logger.error(f"Failed to send deposit failure email for {instance.reference_id}: {str(e)}")
-        elif instance.transaction_type == 'withdrawal':
-            try:
+            elif instance.transaction_type == 'withdrawal':
                 send_mail(
                     "Withdrawal Failed",
                     f"Hi {user.username},\n\nYour withdrawal of {instance.amount} {instance.currency.code} failed.\nRef: {instance.reference_id}",
@@ -142,5 +166,5 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     [user.email],
                     fail_silently=True
                 )
-            except Exception as e:
-                logger.error(f"Failed to send withdrawal failure email for {instance.reference_id}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to send failure email for {instance.reference_id}: {str(e)}")
