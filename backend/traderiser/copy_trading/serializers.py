@@ -7,7 +7,7 @@ from decimal import Decimal
 class TraderSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     win_rate = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
-    average_return = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
+    average_return = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     subscriber_count = serializers.IntegerField(read_only=True)
 
     class Meta:
