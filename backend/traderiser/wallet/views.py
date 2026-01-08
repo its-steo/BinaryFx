@@ -516,31 +516,31 @@ class InitiateTransferView(APIView):
             account_type=recipient_account_type
         )
 
-        try:
-            # Lock sender's main USD wallet to prevent concurrent spending
-            sender_wallet = Wallet.objects.select_for_update().get(
-                account=sender_account,
-                wallet_type='main',
-                currency__code='USD'
-            )
-        except Wallet.DoesNotExist:
-            return Response({'error': 'Your main USD wallet not found. Contact support.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if sender_wallet.balance < amount:
-            return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            recipient_wallet = Wallet.objects.get(
-                account=recipient_account,
-                wallet_type='main',
-                currency__code='USD'
-            )
-        except Wallet.DoesNotExist:
-            return Response({'error': 'Recipient wallet not available'}, status=status.HTTP_400_BAD_REQUEST)
-
         reference_id = generate_transfer_reference()
 
-        with transaction.atomic():
+        with transaction.atomic():  # Wrap the locking query, balance check, and creations here
+            try:
+                # Lock sender's main USD wallet to prevent concurrent spending
+                sender_wallet = Wallet.objects.select_for_update().get(
+                    account=sender_account,
+                    wallet_type='main',
+                    currency__code='USD'
+                )
+            except Wallet.DoesNotExist:
+                return Response({'error': 'Your main USD wallet not found. Contact support.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if sender_wallet.balance < amount:
+                return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                recipient_wallet = Wallet.objects.get(
+                    account=recipient_account,
+                    wallet_type='main',
+                    currency__code='USD'
+                )
+            except Wallet.DoesNotExist:
+                return Response({'error': 'Recipient wallet not available'}, status=status.HTTP_400_BAD_REQUEST)
+
             # Create transfer_out (sender)
             transfer_out = WalletTransaction.objects.create(
                 wallet=sender_wallet,
@@ -574,23 +574,23 @@ class InitiateTransferView(APIView):
                 expires_at=timezone.now() + timezone.timedelta(minutes=5)
             )
 
-            # Send OTP via email
-            try:
-                send_mail(
-                    "Your Transfer OTP Code",
-                    f"Hi {request.user.username},\n\n"
-                    f"Your OTP for transferring ${amount} USD (Ref: {reference_id}) is:\n\n"
-                    f"{otp.code}\n\n"
-                    f"This code expires in 5 minutes.\n"
-                    f"If you didn't initiate this, contact support immediately.\n\n"
-                    f"Thank you,\nTradeRiser Team",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [request.user.email],
-                    fail_silently=False,
-                )
-            except Exception as e:
-                logger.error(f"Failed to send transfer OTP email: {str(e)}")
-                return Response({'error': 'Failed to send OTP. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Send OTP via email (outside atomic, as it's non-db operation)
+        try:
+            send_mail(
+                "Your Transfer OTP Code",
+                f"Hi {request.user.username},\n\n"
+                f"Your OTP for transferring ${amount} USD (Ref: {reference_id}) is:\n\n"
+                f"{otp.code}\n\n"
+                f"This code expires in 5 minutes.\n"
+                f"If you didn't initiate this, contact support immediately.\n\n"
+                f"Thank you,\nTradeRiser Team",
+                settings.DEFAULT_FROM_EMAIL,
+                [request.user.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            logger.error(f"Failed to send transfer OTP email: {str(e)}")
+            return Response({'error': 'Failed to send OTP. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({
             'message': 'Transfer initiated successfully. Check your email for OTP.',
