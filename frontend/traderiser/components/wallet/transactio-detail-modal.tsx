@@ -57,7 +57,7 @@ export function TransactionDetailModal({ transaction, onClose }: TransactionDeta
   const derivId = transaction.reference_id 
     ? transaction.reference_id.replace("WT-", "").replace("TR-", "") 
     : "N/A";
-  const mpesaId = transaction.checkout_request_id || "TL..";
+  const mpesaId = transaction.checkout_request_id || "UA..";
 
   const formattedDate = new Date(transaction.created_at).toLocaleString("en-US", {
     day: "2-digit",
