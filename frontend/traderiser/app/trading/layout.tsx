@@ -89,13 +89,15 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
 
         setIsLoggedIn(true);
         setUser(normalizedUser);
-        const storedAccountType = localStorage.getItem("account_type") || "standard";
-        const storedLoginType = localStorage.getItem("login_type") || "real";
-        setLoginType(storedLoginType);
-        const account = normalizedUser.accounts.find((acc: Account) => acc.account_type === storedAccountType) ||
-                       (storedLoginType === "real" ? normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") : normalizedUser.accounts.find((acc: Account) => acc.account_type === "demo")) ||
-                       normalizedUser.accounts[0];
-
+       const storedLoginType = localStorage.getItem("login_type") || "real";  // Get this first
+       const storedAccountType = localStorage.getItem("account_type") ||
+                                 (storedLoginType === "real" ? "standard" : "demo");  // ← CHANGE: Dynamic default based on login_type
+       
+       setLoginType(storedLoginType);
+       const account = normalizedUser.accounts.find((acc: Account) => acc.account_type === storedAccountType) ||
+                      (storedLoginType === "real" ? normalizedUser.accounts.find((acc: Account) => acc.account_type === "standard") : normalizedUser.accounts.find((acc: Account) => acc.account_type === "demo")) ||
+                      normalizedUser.accounts[0];;
+       
         if (!account) {
           throw new Error("No valid account found in session data");
         }
