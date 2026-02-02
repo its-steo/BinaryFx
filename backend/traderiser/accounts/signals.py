@@ -1,5 +1,5 @@
 # signals.py
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from accounts.models import User, Account
 from django.core.mail import send_mail
@@ -50,3 +50,16 @@ def sync_account_to_wallet(sender, instance, **kwargs):
         logger.info(f"Created main USD wallet for Account {instance.id} with balance {initial_balance}")
     except Exception as e:
         logger.error(f"Failed to sync Account {instance.id} to wallet: {str(e)}")
+
+# signals.py — improve pre_save to be more defensive
+@receiver(pre_save, sender=User)
+def create_referral_code_on_marketo(sender, instance, **kwargs):
+    if instance.is_marketo and not getattr(instance, 'referral_code', None):
+        instance.referral_code = instance.generate_referral_code()
+
+
+@receiver(post_save, sender=User)
+def ensure_referral_code_exists(sender, instance, created, **kwargs):
+    if instance.is_marketo and not instance.referral_code:
+        instance.referral_code = instance.generate_referral_code()
+        instance.save(update_fields=['referral_code'])

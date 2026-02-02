@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [accountType, setAccountType] = useState<"demo" | "standard">(
     searchParams.get("type") === "demo" ? "demo" : "standard"
   );
+  const referralCode = searchParams.get("ref") || "";
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +42,7 @@ export default function LoginPage() {
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const signupLink = `/signup?type=${accountType}${referralCode ? `&ref=${referralCode}` : ""}`;
 
   useEffect(() => {
     setAccountType(searchParams.get("type") === "demo" ? "demo" : "standard");
@@ -317,7 +319,7 @@ export default function LoginPage() {
 
               <p className="text-center text-sm text-white/70">
                 Dont have an account?{" "}
-                <Link href={`/signup?type=${accountType}`} className="text-white hover:underline font-semibold">
+                <Link href={signupLink} className="text-white hover:underline font-semibold">
                   Sign up
                 </Link>
               </p>
