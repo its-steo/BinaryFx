@@ -16,6 +16,8 @@ from datetime import timedelta
 from rest_framework.permissions import AllowAny
 from django.core.mail import send_mail
 import random
+import logging
+logger = logging.getLogger('accounts')
 
 
 class SignupView(APIView):
@@ -28,6 +30,7 @@ class SignupView(APIView):
         username = data.get('username')
         account_type = data.get('account_type', 'standard')
         phone = data.get('phone', '')
+        referral_code = data.get('referral_code') or request.query_params.get('ref')
 
         # Validate required fields
         if not email or not password or not username:
@@ -75,6 +78,34 @@ class SignupView(APIView):
                 {'error': 'Authentication failed after account creation'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+        referrer = None
+        if referral_code:
+            try:
+                referrer = User.objects.get(referral_code=referral_code, is_marketo=True)
+                if user != referrer:  # prevent self-referral
+                    user.referred_by = referrer
+                    user.save(update_fields=['referred_by'])
+
+                    # Notify referrer
+                    try:
+                        send_mail(
+                            subject="New user joined via your Marketor link!",
+                            message=(
+                                f"Hello {referrer.username},\n\n"
+                                f"A new user ({user.username} / {user.email}) "
+                                f"has registered using your referral link.\n\n"
+                                f"Thank you for spreading the word!\n"
+                                f"TradeRiser Team"
+                            ),
+                            from_email='no-reply@traderiser.com',
+                            recipient_list=[referrer.email],
+                            fail_silently=True,   # don't break signup if email fails
+                        )
+                    except Exception as e:
+                        logger.warning(f"Referral notification failed: {e}")
+
+            except User.DoesNotExist:
+                pass  # silent fail – invalid code, no action
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)

@@ -18,6 +18,22 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, blank=True)
     is_sashi = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
+    is_marketo = models.BooleanField(default=False)               # ← new
+    referral_code = models.CharField(max_length=12, unique=True, blank=True, null=True)  # ← new
+    referred_by = models.ForeignKey(                               # ← new
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='referred_users'
+    )
+
+    def generate_referral_code(self):
+        import uuid
+        code = f"MRK-{uuid.uuid4().hex[:8].upper()}"
+        while User.objects.filter(referral_code=code).exists():
+            code = f"MRK-{uuid.uuid4().hex[:8].upper()}"
+        return code
 
     def __str__(self):
         return self.username

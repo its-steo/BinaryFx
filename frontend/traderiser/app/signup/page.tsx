@@ -23,6 +23,7 @@ export default function SignupPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const accountType = searchParams.get("type") === "demo" ? "demo" : "standard";
+  const referralCode = searchParams.get("ref") || "";
 
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -89,6 +90,7 @@ export default function SignupPage() {
         password: formData.password,
         phone: formData.phone,
         account_type: accountType,
+        referral_code: referralCode,
       });
 
       if (response.error) {

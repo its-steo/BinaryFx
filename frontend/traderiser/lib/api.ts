@@ -456,6 +456,7 @@ export const signup = async (data: {
   password: string
   phone?: string
   account_type: string
+  referral_code?: string;
 }) => {
   const response = await apiRequest<{
     access: string

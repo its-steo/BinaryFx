@@ -49,8 +49,8 @@ class AccountInline(admin.TabularInline):
 
 class CustomUserAdmin(UserAdmin):
     model = User
-    list_display = ('username', 'email', 'phone', 'is_sashi', 'is_email_verified', 'is_active', 'is_staff')
-    list_filter = ('is_sashi', 'is_email_verified', 'is_active', 'is_staff')
+    list_display = ('username', 'email', 'phone', 'is_sashi', 'is_email_verified','referral_code', 'is_active', 'is_staff')
+    list_filter = ('is_sashi', 'is_email_verified','is_marketo', 'is_active', 'is_staff')
     search_fields = ('username', 'email', 'phone')
     ordering = ('username',)
     inlines = [AccountInline]
@@ -61,6 +61,7 @@ class CustomUserAdmin(UserAdmin):
         ('Sashi & Verification', {'fields': ('is_sashi', 'is_email_verified')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
+        ('MarketO Referral', {'fields': ('is_marketo', 'referral_code', 'referred_by')}),
     )
     
     add_fieldsets = (
@@ -69,6 +70,14 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('username', 'email', 'phone', 'password1', 'password2', 'is_sashi'),
         }),
     )
+    def save_model(self, request, obj, form, change):
+        # Force generate referral_code if is_marketo=True and no code yet
+        if obj.is_marketo and not obj.referral_code:
+            obj.referral_code = obj.generate_referral_code()
+            # Log it for debugging
+            self.message_user(request, f"Generated referral code {obj.referral_code} for {obj.username}")
+
+        super().save_model(request, obj, form, change)
 
 admin.site.register(User, CustomUserAdmin)
 admin.site.register(Account)
