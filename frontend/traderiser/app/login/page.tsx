@@ -19,6 +19,23 @@ import { api } from "@/lib/api";
 import Image from "next/image";
 import { toast } from "sonner";
 
+// Define the expected shape of API error responses (no 'any'!)
+interface ApiError {
+  response?: {
+    status?: number;
+    data?: {
+      code?: string;
+      details?: {
+        reason?: string;
+        until?: string;
+        evidence_status?: string;
+        appeal_available?: boolean;
+      };
+      [key: string]: unknown; // Allows extra fields without breaking
+    };
+  };
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,6 +79,7 @@ export default function LoginPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Updated handleSubmit – fully type-safe, no 'any'
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -79,16 +97,72 @@ export default function LoginPage() {
         account_type: accountType,
       });
 
-      if (response.error) {
-        toast.error(response.error);
+      // SUCCESS: Check for suspension in response.data
+      if (response.data && 'suspension' in response.data) {
+  const suspension = response.data.suspension!;           // ← tell TS it's definitely there
+
+  const { code, details } = suspension;
+
+  localStorage.setItem('suspensionDetails', JSON.stringify({
+    type: code.replace('suspended_', '') as 'temporary' | 'permanent',
+    reason: details.reason,
+    until: details.until,
+    evidenceStatus: details.evidence_status || 'no_evidence',
+    appealAvailable: details.appeal_available || false,
+  }));
+
+        // User-friendly toast
+        toast.error(
+          code === 'suspended_temporary'
+            ? `Account temporarily suspended until ${details.until ? new Date(details.until).toLocaleString() : 'later'}.`
+            : 'Account permanently suspended. Please submit an appeal for review.'
+        );
+
+        // Redirect to suspension page
+        router.push('/suspended');
         setIsLoading(false);
         return;
       }
 
-      toast.success("Logged in successfully!");
-      router.push("/dashboard");
-    } catch (err) {
-      toast.error("Invalid credentials or server error. Please try again.");
+      // Normal success: No suspension
+      if (response.data) {
+        toast.success("Logged in successfully!");
+        router.push("/dashboard");
+      }
+    } catch (err: unknown) {
+      const apiError = err as ApiError;
+
+      const errorData = apiError.response?.data ?? {};
+      const status = apiError.response?.status ?? 0;
+
+      if (status === 401 || status === 403) {
+        // Check if it's a suspension-related error (if backend still raises)
+        if (errorData.code === 'suspended_temporary' || errorData.code === 'suspended_permanent') {
+          // Fallback: Save minimal details and redirect
+          localStorage.setItem('suspensionDetails', JSON.stringify({
+            type: (errorData.code as string).replace('suspended_', '') as 'temporary' | 'permanent',
+            reason: (errorData.details as { reason?: string })?.reason || 'Your account has been suspended',
+            until: (errorData.details as { until?: string })?.until,
+            evidenceStatus: (errorData.details as { evidence_status?: string })?.evidence_status || 'no_evidence',
+            appealAvailable: (errorData.details as { appeal_available?: boolean })?.appeal_available || false,
+          }));
+
+          toast.error(
+            errorData.code === 'suspended_temporary'
+              ? `Account temporarily suspended.`
+              : 'Account permanently suspended. Please submit an appeal.'
+          );
+
+          router.push('/suspended');
+          setIsLoading(false);
+          return;
+        }
+
+        // Generic auth failure
+        toast.error("Invalid email or password. Please try again.");
+      } else {
+        toast.error("Login failed. Check your connection and try again.");
+      }
     } finally {
       setIsLoading(false);
     }

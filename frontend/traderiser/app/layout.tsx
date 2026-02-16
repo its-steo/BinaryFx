@@ -6,6 +6,9 @@ import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { Suspense } from "react";
 import ClientWrapper from "@/components/ClientWrapper";
+import InstallButton from '@/components/InstallButton';
+import SuspensionGuard from '@/components/SuspensionGuard';   // ← new import
+
 import "./globals.css";
 
 const inter = Inter({
@@ -58,7 +61,10 @@ export default function RootLayout({
         >
           <ClientWrapper>
             {children}
+            <SuspensionGuard />          {/* ← use the imported component */}
+            <InstallButton />
           </ClientWrapper>
+
           <Toaster 
             theme="dark"
             richColors

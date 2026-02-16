@@ -279,10 +279,10 @@ export default function FxProRobotsPage() {
                       className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg border border-white/10 overflow-hidden relative"
                     >
                       {hasDiscount && (
-                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-red-600 to-green-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg animate-pulse">
-                          <Gift className="w-3.5 h-3.5" />
-                          <span>New Year Deal {discountPercent}% OFF</span>
-                          <Sparkles className="w-3 h-3" />
+                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-rose-500 to-pink-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg animate-pulse">
+                          <span className="text-base">💕</span>
+                          <span>Valentine Deal {discountPercent}% OFF</span>
+                          <span className="text-base">💕</span>
                         </div>
                       )}
 
@@ -366,9 +366,9 @@ export default function FxProRobotsPage() {
                       className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg border border-white/10 overflow-hidden relative"
                     >
                       {wasPurchasedOnSale && (
-                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-red-600/80 to-green-600/80 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                          <Gift className="w-3 h-3" />
-                          <span>New Year 2026 Deal</span>
+                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-rose-500/80 to-pink-600/80 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                          <span>💕</span>
+                          <span>Valentine Deal</span>
                         </div>
                       )}
 
