@@ -24,7 +24,7 @@ export function ManagementForm({ onSuccess }: ManagementFormProps) {
     stake: "",
     target_profit: "",
     mpesa_phone: "",
-    account_type: "standard" as "standard" | "profx",
+    account_type: "standard" as "standard" | "pro-fx",
   })
 
   const stakeNum = Number.parseFloat(formData.stake) || 0
@@ -32,7 +32,11 @@ export function ManagementForm({ onSuccess }: ManagementFormProps) {
   const serviceFeeUSD = targetProfitNum * 0.2
   const serviceFeeKSH = serviceFeeUSD * USD_TO_KSH_RATE
 
-  const isValid = stakeNum >= 50 && targetProfitNum >= 10 && formData.mpesa_phone.length >= 9
+  const isValid =
+    stakeNum >= 50 &&
+    targetProfitNum >= 10 &&
+    formData.mpesa_phone.length >= 9 &&
+    formData.mpesa_phone.startsWith("254") // optional: stricter validation
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,8 +51,12 @@ export function ManagementForm({ onSuccess }: ManagementFormProps) {
         account_type: formData.account_type,
       })
 
-      if (response.data) {
+      if (response.data?.management_id) {
         onSuccess(response.data.management_id)
+        toast({
+          title: "Success",
+          description: "Management request initiated! Check your phone for M-Pesa prompt.",
+        })
       } else {
         toast({
           title: "Error",
@@ -71,13 +79,16 @@ export function ManagementForm({ onSuccess }: ManagementFormProps) {
     <Card className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 border-white/10 backdrop-blur-sm">
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">Initiate Management Request</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">
+            Initiate Management Request
+          </h2>
           <p className="text-sm sm:text-base text-white/70">
             Fill in your details to start professional account management
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+          {/* Account Type */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-white/90 flex items-center gap-2">
               <Building2 className="w-4 h-4" />
@@ -88,7 +99,7 @@ export function ManagementForm({ onSuccess }: ManagementFormProps) {
                 <button
                   key={type}
                   type="button"
-                  onClick={() => setFormData({ ...formData, account_type: type })}
+                  onClick={() => setFormData({ ...formData, account_type: type as "standard" | "pro-fx" })}
                   className={`p-3 sm:p-4 rounded-lg border-2 transition-all ${
                     formData.account_type === type
                       ? "border-pink-500 bg-pink-500/10 text-white"
@@ -165,13 +176,16 @@ export function ManagementForm({ onSuccess }: ManagementFormProps) {
             />
           </div>
 
+          {/* Service Fee Display */}
           {targetProfitNum >= 10 && (
             <div className="bg-gradient-to-r from-pink-500/10 to-pink-600/10 border border-pink-500/20 rounded-lg p-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex-1">
                   <p className="text-white/70 text-sm">Service Fee (20% of target)</p>
                   <p className="text-xs sm:text-sm text-white/60">${serviceFeeUSD.toFixed(2)} USD</p>
-                  <p className="text-xl sm:text-2xl font-bold text-white">KES {serviceFeeKSH.toFixed(2)}</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white">
+                    KES {serviceFeeKSH.toFixed(2)}
+                  </p>
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-pink-500/20 flex items-center justify-center flex-shrink-0">
                   <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-pink-400" />
@@ -180,6 +194,7 @@ export function ManagementForm({ onSuccess }: ManagementFormProps) {
             </div>
           )}
 
+          {/* Submit Button */}
           {isValid && (
             <Button
               type="submit"

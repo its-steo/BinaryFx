@@ -1,20 +1,30 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Zap, Shield, DollarSign, ChevronRight, CheckCircle2, AlertCircle, Sparkles } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { Zap, Shield, DollarSign, ChevronRight, CheckCircle2, AlertCircle, Sparkles, Download } from "lucide-react"
 import LandingPage from "./landing-page"
+import InstallButton from '@/components/InstallButton'; // Assuming path to your InstallButton component
 
 export default function WelcomePage() {
   const [showTerms, setShowTerms] = useState(false)
+  const [showInstallModal, setShowInstallModal] = useState(false)
   const [hasVisited, setHasVisited] = useState(false)
   const [agreed, setAgreed] = useState(false)
+
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     const visited = localStorage.getItem("v2_welcome_seen")
     if (visited) {
       setHasVisited(true)
     }
-  }, [])
+
+    // Check for install query param
+    if (searchParams.get('install') === 'true') {
+      setShowInstallModal(true)
+    }
+  }, [searchParams])
 
   const handleContinue = () => {
     setShowTerms(true)
@@ -99,7 +109,7 @@ export default function WelcomePage() {
                 </ul>
               </section>
 
-                           {/* Account Management & Features */}
+              {/* Account Management & Features */}
               <section>
                 <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                   <div className="w-9 sm:w-10 h-9 sm:h-10 rounded-lg bg-gradient-to-br from-purple-600 to-purple-500 flex items-center justify-center flex-shrink-0">
@@ -165,19 +175,7 @@ export default function WelcomePage() {
                   <li className="flex gap-3 group">
                     <AlertCircle className="w-4 sm:w-5 h-4 sm:h-5 text-yellow-400 flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                     <span>
-                      <strong className="text-white">Leverage Limits:</strong> Maximum 50:1 leverage on forex, 1:1 on crypto. Use responsibly.
-                    </span>
-                  </li>
-                  <li className="flex gap-3 group">
-                    <AlertCircle className="w-4 sm:w-5 h-4 sm:h-5 text-yellow-400 flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                    <span>
-                      <strong className="text-white">Withdrawal Restrictions:</strong> Withdrawals are not allowed while active automated robots are running or before completing any ongoing account management requirements.
-                    </span>
-                  </li>
-                  <li className="flex gap-3 group">
-                    <AlertCircle className="w-4 sm:w-5 h-4 sm:h-5 text-yellow-400 flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                    <span>
-                      <strong className="text-white">Multi-Device Login:</strong> Simultaneous use of the same account on multiple devices is strictly prohibited for security reasons.
+                      <strong className="text-white">Leverage Limits:</strong> Maximum 1:100 leverage on forex pairs. Higher leverage increases risk.
                     </span>
                   </li>
                 </ul>
@@ -206,6 +204,51 @@ export default function WelcomePage() {
                 className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-pink-600 to-pink-500 text-white text-sm sm:text-base hover:from-pink-700 hover:to-pink-600 transition-all font-semibold shadow-lg hover:shadow-pink-500/50 hover:shadow-2xl transform hover:scale-105 active:scale-95"
               >
                 I Agree & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Install Modal */}
+      {showInstallModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-gray-950/95 rounded-2xl sm:rounded-3xl border border-cyan-500/30 w-full max-w-md max-h-[80vh] overflow-y-auto shadow-2xl ring-1 ring-white/10 animate-scale-in">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-b from-gray-950 to-transparent px-4 sm:px-6 py-6 border-b border-white/10">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                <Download className="w-5 sm:w-6 h-5 sm:h-6 text-cyan-500 flex-shrink-0" />
+                <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-transparent">
+                  Install TradeRiser App
+                </h2>
+              </div>
+              <p className="text-white/50 text-xs sm:text-sm">Go mobile for offline access & push alerts!</p>
+            </div>
+
+            {/* Content */}
+            <div className="px-4 sm:px-6 py-6 sm:py-8 space-y-4">
+              <p className="text-white/80 text-sm sm:text-base text-center leading-relaxed">
+                Add TradeRiser to your home screen for a seamless trading experience. Get instant notifications and trade anywhere, anytime.
+              </p>
+              
+              {/* Install Button */}
+              <div className="flex justify-center">
+                <InstallButton />
+              </div>
+
+              {/* Fallback for iOS */}
+              <div className="text-center text-white/60 text-xs sm:text-sm">
+                <p>On iOS: Tap <strong>Share</strong> → <strong>Add to Home Screen</strong></p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-gradient-to-t from-gray-950 to-transparent px-4 sm:px-6 py-4 border-t border-white/10">
+              <button
+                onClick={() => setShowInstallModal(false)}
+                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border border-white/20 text-white text-sm sm:text-base hover:border-white/40 hover:bg-white/5 transition-all font-semibold backdrop-blur-sm"
+              >
+                Maybe Later
               </button>
             </div>
           </div>

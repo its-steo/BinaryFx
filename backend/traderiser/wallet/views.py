@@ -173,11 +173,31 @@ class WithdrawalOTPView(APIView):
         wallet_type = data['wallet_type']
         account_type = data['account_type']
 
+        # ==================== MIN & MAX WITHDRAWAL LIMITS ====================
+        MIN_WITHDRAWAL_USD = Decimal('2.00')
+        MAX_WITHDRAWAL_USD = Decimal('2000.00')
+
+        if amount < MIN_WITHDRAWAL_USD:
+            return Response({
+                'error': f'Minimum withdrawal amount is {MIN_WITHDRAWAL_USD} USD'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if amount > MAX_WITHDRAWAL_USD:
+            return Response({
+                'error': f'Maximum withdrawal amount is {MAX_WITHDRAWAL_USD} USD'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        # =====================================================================
+
         try:
             account, _ = Account.objects.get_or_create(user=request.user, account_type=account_type)
             currency = Currency.objects.get(code='USD')
             target_currency = Currency.objects.get(code='KSH')
-            wallet, _ = Wallet.objects.get_or_create(account=account, wallet_type=wallet_type, currency=currency, defaults={'balance': Decimal('0.00')})
+            wallet, _ = Wallet.objects.get_or_create(
+                account=account,
+                wallet_type=wallet_type,
+                currency=currency,
+                defaults={'balance': Decimal('0.00')}
+            )
         except Currency.DoesNotExist:
             return Response({'error': 'Currency not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -190,49 +210,62 @@ class WithdrawalOTPView(APIView):
                 target_currency=target_currency
             )
             exchange_rate = exchange_rate_obj.admin_withdrawal_rate
-            converted_amount = amount * exchange_rate
+            converted_amount = amount * exchange_rate  # USD → KSH
         except ExchangeRate.DoesNotExist:
             return Response({'error': 'Exchange rate not available'}, status=status.HTTP_400_BAD_REQUEST)
 
         reference_id = generate_reference_id()
-        trans = WalletTransaction.objects.create(
-            wallet=wallet,
-            transaction_type='withdrawal',
-            amount=amount,
-            currency=wallet.currency,
-            target_currency=target_currency,
-            converted_amount=converted_amount,
-            exchange_rate_used=exchange_rate,
-            status='pending',
-            reference_id=reference_id,
-            description='Withdrawal initiated',
-            mpesa_phone=request.user.mpesa_number.phone_number if hasattr(request.user, 'mpesa_number') else ''
-        )
 
-        otp_code = generate_otp()
-        OTPCode.objects.create(
-            user=request.user,
-            code=otp_code,
-            purpose='withdrawal',
-            transaction=trans
-        )
+        with transaction.atomic():
+            trans = WalletTransaction.objects.create(
+                wallet=wallet,
+                transaction_type='withdrawal',
+                amount=amount,                    # USD amount
+                currency=wallet.currency,         # USD
+                target_currency=target_currency,  # KSH
+                converted_amount=converted_amount,
+                exchange_rate_used=exchange_rate,
+                status='pending',
+                reference_id=reference_id,
+                description='Withdrawal initiated - awaiting OTP verification',
+                mpesa_phone=request.user.mpesa_number.phone_number if hasattr(request.user, 'mpesa_number') else ''
+            )
 
+            otp_code = generate_otp()
+            OTPCode.objects.create(
+                user=request.user,
+                code=otp_code,
+                purpose='withdrawal',
+                transaction=trans,
+                expires_at=timezone.now() + timezone.timedelta(minutes=5)
+            )
+
+        # Send OTP via email
         try:
             send_mail(
-                "Withdrawal OTP",
-                f"Hi {request.user.username},\n\nYour OTP for withdrawing {amount} USD from {account_type} account (Ref: {reference_id}) is {otp_code}.",
-                settings.DEFAULT_FROM_EMAIL,
-                [request.user.email],
-                fail_silently=False
+                subject="Your Withdrawal OTP Code",
+                message=f"Hi {request.user.username},\n\n"
+                        f"Your OTP for withdrawing ${amount} USD (≈ {converted_amount:.2f} KSH)\n"
+                        f"from your {account_type.title()} account (Ref: {reference_id}) is:\n\n"
+                        f"{otp_code}\n\n"
+                        f"This OTP expires in 5 minutes.\n"
+                        f"If you did not request this, contact support immediately.\n\n"
+                        f"Thank you,\nTradeRiser Team",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[request.user.email],
+                fail_silently=False,
             )
         except Exception as e:
-            logger.error(f"Failed to send OTP email: {str(e)}")
-            return Response({'error': 'Failed to send OTP email'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Failed to send withdrawal OTP email: {str(e)}")
+            return Response({'error': 'Failed to send OTP. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({
-            'message': 'OTP sent to your email',
+            'message': 'Withdrawal request created successfully. Check your email for OTP.',
+            'reference_id': reference_id,
+            'amount_usd': str(amount),
+            'amount_ksh': str(converted_amount),
             'transaction_id': trans.id
-        })
+        }, status=status.HTTP_200_OK)
 
 class VerifyWithdrawalOTPView(APIView):
     permission_classes = [permissions.IsAuthenticated]

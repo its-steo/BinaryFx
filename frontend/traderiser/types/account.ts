@@ -29,11 +29,32 @@ export interface ManagementRequest {
   start_date: string | null
   end_date: string | null
   created_at: string
-  account_type: "standard" | "profx"
+  account_type: "standard" | "pro-fx"
 }
 
 export const ACCOUNT_TYPE_LABELS = {
   standard: "Standard Account",
-  profx: "ProFX Account",
-} as const
+  "pro-fx": "ProFX Account",
+} 
+
+export interface SuspensionDetails {
+  reason?: string;
+  until?: string;
+  evidence_status?: string;
+  appeal_available?: boolean;
+  // add more fields if backend sends them
+}
+
+export interface LoginSuccessResponse {
+  // normal success fields (token, user, etc.)
+  access_token?: string;
+  user?: { id: string; email: string; /* ... */ };
+  // ... other fields
+
+  // suspension info when present
+  suspension?: {
+    code: 'suspended_temporary' | 'suspended_permanent';
+    details: SuspensionDetails;
+  };
+}
 

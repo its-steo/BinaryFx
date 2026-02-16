@@ -1,3 +1,4 @@
+// lib/api.ts (updated with suspension typing)
 //const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://binaryfx.onrender.com/api"
 
@@ -288,6 +289,28 @@ export interface Signal {
   strength?:number
 }
 
+// Suspension interfaces (new)
+export interface SuspensionDetails {
+  reason?: string;
+  until?: string;
+  evidence_status?: string;
+  appeal_available?: boolean;
+  [key: string]: unknown;
+}
+
+export interface SuspensionInfo {
+  code: "suspended_temporary" | "suspended_permanent";
+  details: SuspensionDetails;
+}
+
+export type LoginResponseData = {
+  access: string;
+  refresh: string;
+  user: UserSession;
+  active_account: Record<string, unknown>;
+  suspension?: SuspensionInfo;  // ← NEW: Optional suspension field
+};
+
 /* ------------------------------------------------------------------ */
 /*  TOKEN KEYS – MUST MATCH login/signup response                     */
 /* ------------------------------------------------------------------ */
@@ -412,17 +435,10 @@ export async function apiRequestWithFile<T>(
   // Token refresh logic...
   if (resp.status === 401 && token && !endpoint.includes("token/refresh")) {
     const newToken = await refreshAccessToken()
-    if (!newToken) {
-      return { error: "Session expired. Please log in again.", status: 401 }
+    if (newToken) {
+      headers.set("Authorization", `Bearer ${newToken}`)
+      resp = await fetch(url, { ...options, method: "POST", headers, body: formData, credentials: "include" })
     }
-    headers.set("Authorization", `Bearer ${newToken}`)
-    resp = await fetch(url, {
-      ...options,
-      method: "POST",
-      headers,
-      body: formData,
-      credentials: "include",
-    })
   }
 
   let json: T | Record<string, unknown>
@@ -433,15 +449,12 @@ export async function apiRequestWithFile<T>(
   }
 
   if (!resp.ok) {
-    const screenshot = (json as Record<string, unknown>)?.screenshot
-    const screenshotError = Array.isArray(screenshot) ? screenshot[0] : undefined
     const detail = (json as Record<string, unknown>)?.detail
     const error = (json as Record<string, unknown>)?.error
     const msg =
-      (typeof screenshotError === "string" ? screenshotError : undefined) ??
       (typeof detail === "string" ? detail : undefined) ??
       (typeof error === "string" ? error : undefined) ??
-      `Upload failed (${resp.status})`
+      `Request failed (${resp.status})`
     return { error: msg, status: resp.status }
   }
 
@@ -493,12 +506,7 @@ export const signup = async (data: {
 }
 
 export const login = async (data: { email: string; password: string; account_type: string }) => {
-  const response = await apiRequest<{
-    access: string
-    refresh: string
-    user: UserSession
-    active_account: Record<string, unknown>
-  }>("/accounts/login/", {
+  const response = await apiRequest<LoginResponseData>("/accounts/login/", {
     method: "POST",
     body: JSON.stringify(data),
   })
@@ -898,7 +906,7 @@ export const initiateManagement = (data: {
   stake: number
   target_profit: number
   mpesa_phone: string
-  account_type: "standard" | "profx"
+  account_type: "standard" | "pro-fx"
 }) =>
   apiRequest<InitiateManagementResponse>("/management/initiate/", {
     method: "POST",
@@ -932,7 +940,7 @@ export interface ManagementRequest {
   start_date: string | null
   end_date: string | null
   created_at: string
-  account_type: "standard" | "profx"
+  account_type: "standard" | "pro-fx"
 }
 
 /**
@@ -1000,6 +1008,27 @@ export async function resumeSubscription(subscriptionId: number, allocatedAmount
   })
 }
 
+/* ------------------------------------------------------------------ */
+/*  Account Suspension                                               */
+/* ------------------------------------------------------------------ */
+
+// Option 1: Most precise (recommended if you know the exact shape)
+export async function appealSuspension(formData: FormData) {
+  return apiRequestWithFile<{
+    message: string;
+    evidence?: {
+      id: string | number;
+      url: string;
+      filename?: string;
+      uploaded_at?: string;
+      // add any other fields your backend actually returns
+    } | null;
+  }>(
+    "/accounts/appeal-suspension/",
+    formData,
+    {} // no extra options needed
+  );
+}
 /* ------------------------------------------------------------------ */
 /*  EXPORT API OBJECT                                                 */
 /* ------------------------------------------------------------------ */
@@ -1071,4 +1100,5 @@ export const api = {
   initiateTransfer,
   verifyTransfer,
   generateSignal,
+  appealSuspension,
 }

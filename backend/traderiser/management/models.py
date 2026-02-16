@@ -29,7 +29,7 @@ class ManagementRequest(models.Model):
 
     ACCOUNT_TYPES = [
         ('standard', 'Standard'),
-        ('profx', 'ProFX'),
+        ('pro-fx', 'ProFX'),
         # Add other types if needed
     ]
 

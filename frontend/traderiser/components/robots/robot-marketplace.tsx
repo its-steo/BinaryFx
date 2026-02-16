@@ -123,19 +123,19 @@ export function RobotMarketplace({ balance, onBalanceChange }: RobotMarketplaceP
             {hasDiscount && !isDemoMode && (
               <div className="absolute top-4 right-4 z-10">
                 <div className="relative">
-                  <div className="absolute -top-3 -left-3 text-white/30 text-lg">✨</div>
-                  <div className="absolute -bottom-3 -right-3 text-white/30 text-lg">✨</div>
-                  <div className="bg-gradient-to-br from-amber-400 via-yellow-300 to-cyan-400 text-gray-900 px-4 py-2 rounded-xl font-bold shadow-lg transform -rotate-2">
+                  <div className="absolute -top-3 -left-3 text-red-300/40 text-xl">💝</div>
+                  <div className="absolute -bottom-3 -right-3 text-rose-300/40 text-xl">💝</div>
+                  <div className="bg-gradient-to-br from-rose-500 via-pink-500 to-red-600 text-white px-4 py-2 rounded-2xl font-bold shadow-2xl transform -rotate-3 border border-rose-300/50">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">🎆</span>
+                      <span className="text-lg animate-pulse">💕</span>
                       <div className="flex flex-col items-center">
-                        <span className="text-xs uppercase tracking-wide font-black">New Year</span>
+                        <span className="text-xs uppercase tracking-widest font-black">Valentine</span>
                         <span className="text-lg leading-none">{discountPercent}% OFF</span>
                       </div>
-                      <span className="text-lg">🎉</span>
+                      <span className="text-lg animate-pulse">💕</span>
                     </div>
                   </div>
-                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-amber-300"></div>
+                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-600"></div>
                 </div>
               </div>
             )}

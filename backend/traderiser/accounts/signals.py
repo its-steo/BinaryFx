@@ -6,6 +6,7 @@ from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
+from .models import User, Account, SuspensionEvidence
 from wallet.models import Wallet
 from django.apps import apps
 from decimal import Decimal
@@ -63,3 +64,38 @@ def ensure_referral_code_exists(sender, instance, created, **kwargs):
     if instance.is_marketo and not instance.referral_code:
         instance.referral_code = instance.generate_referral_code()
         instance.save(update_fields=['referral_code'])
+
+@receiver(post_save, sender=User)
+def check_and_unsuspend_expired(sender, instance, **kwargs):
+    if instance.is_temporarily_suspended:
+        instance.clean_up_expired_suspension()
+        if not instance.is_suspended:  # Was unsuspended
+            # Re-send welcome email or something
+            pass
+@receiver(post_save, sender=SuspensionEvidence)
+def handle_evidence_review(sender, instance, **kwargs):
+    if kwargs.get('created'):
+        return  # Skip on create (appeal submission)
+
+    # Check if status changed
+    if 'status' in instance.get_dirty_fields():
+        user = instance.user
+        if instance.status == 'approved':
+            # Unsuspend and notify
+            user.unsuspend(unsuspended_by=instance.reviewed_by)
+            send_mail(
+                "TradeRiser Account Recovered",
+                f"Dear {user.username},\n\nYour appeal was approved. Your account has been recovered and is now active.\n\nWelcome back!\nTradeRiser Team",
+                'no-reply@traderiser.com',
+                [user.email],
+                fail_silently=False
+            )
+        elif instance.status == 'rejected':
+            # Notify rejection
+            send_mail(
+                "TradeRiser Appeal Rejected",
+                f"Dear {user.username},\n\nYour appeal was reviewed and rejected. Your account remains suspended.\n\nReason: {instance.description}\nContact support for more info.\nTradeRiser Team",
+                'no-reply@traderiser.com',
+                [user.email],
+                fail_silently=False
+            )
