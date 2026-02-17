@@ -18,7 +18,7 @@ export default function Page() {
       {/* Image displayed normally */}
       <div className="mb-8 w-full max-w-3xl">
         <Image
-          src="/images/landing.jpg"
+          src="/landing.jpg"
           alt="Funny chaos"
           width={1200}
           height={700}
@@ -28,11 +28,11 @@ export default function Page() {
 
       {/* Funny Text */}
       <div className="text-3xl md:text-4xl font-extrabold text-pink-500 mb-6">
-        Go sell nudes Bro
+        Go sell nudes like me
       </div>
 
       <p className="text-white/70 mb-10 text-center max-w-xl">
-        Because trading here? Yeah… maybe not today. Account balance says it all.
+        I am not loved at home too 
       </p>
 
       {/* Redirect Button */}
@@ -40,7 +40,7 @@ export default function Page() {
         onClick={() => window.location.href = "https://www.pornhub.com"}
         className="px-10 py-4 rounded-xl bg-gradient-to-r from-pink-600 to-red-600 hover:scale-105 transition-transform font-bold text-lg shadow-2xl"
       >
-        Click to view My Nudes
+        See My Nudes here
       </button>
 
     </div>
