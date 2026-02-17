@@ -23,7 +23,7 @@ export default function Page() {
         {/* Image Section */}
         <div className="relative w-full h-[300px] md:h-[400px] mb-10 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
           <Image
-            src="/images/landing.jpg"
+            src="/landing.jpg"
             alt="Chaos"
             fill
             className="object-cover"
@@ -31,7 +31,7 @@ export default function Page() {
           />
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <p className="text-3xl md:text-5xl font-extrabold text-white text-center px-4">
-              We have been SCAMMED 😭
+              Go Wank 
             </p>
           </div>
         </div>
