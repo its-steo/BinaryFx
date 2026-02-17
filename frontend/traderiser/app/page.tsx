@@ -45,7 +45,7 @@ export default function Page() {
 
         <div className="mt-12 p-8 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl">
           <p className="text-3xl md:text-4xl font-extrabold text-pink-500">
-            Go sell nudes. on Pornhub 
+            Go sell nudes.
           </p>
 
           <p className="mt-4 text-white/50">
@@ -57,7 +57,7 @@ export default function Page() {
           onClick={() => window.location.reload()}
           className="mt-10 px-10 py-4 rounded-xl bg-gradient-to-r from-pink-600 to-red-600 hover:scale-110 transition-transform font-bold text-lg shadow-xl"
         >
-          Try Again in yur dreams.
+          Try Again Tomorrow 🚀
         </button>
 
       </div>
